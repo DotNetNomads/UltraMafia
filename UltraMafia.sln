@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia", "UltraMafia.csproj", "{730C4A3A-5CCA-43FF-8B4C-202C15595917}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.DAL", "UltraMafia.DAL\UltraMafia.DAL.csproj", "{BB875909-72F0-4E28-B7F5-496BF15D3CC0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{730C4A3A-5CCA-43FF-8B4C-202C15595917}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{730C4A3A-5CCA-43FF-8B4C-202C15595917}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{730C4A3A-5CCA-43FF-8B4C-202C15595917}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{730C4A3A-5CCA-43FF-8B4C-202C15595917}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BB875909-72F0-4E28-B7F5-496BF15D3CC0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB875909-72F0-4E28-B7F5-496BF15D3CC0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB875909-72F0-4E28-B7F5-496BF15D3CC0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB875909-72F0-4E28-B7F5-496BF15D3CC0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
