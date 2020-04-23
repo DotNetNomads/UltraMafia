@@ -99,10 +99,8 @@ namespace UltraMafia
                     stopwatch.Start();
 
                     await SendIntroduceMessages(session.GameMembers);
-
-                    var gameFinished = false;
                     var dayNumber = 1;
-                    while (!gameFinished)
+                    while (true)
                     {
                         #region Night logic
 

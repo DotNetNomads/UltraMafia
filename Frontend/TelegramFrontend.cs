@@ -157,7 +157,7 @@ namespace UltraMafia.Frontend
                 new InlineKeyboardButton
                 {
                     Text = "Я в деле! 🎮",
-                    Url = $"https://t.me/getero_mafia_bot?start={session.RoomId}"
+                    Url = $"https://t.me/{_settings.BotUserName}?start={session.RoomId}"
                 }
             };
             var currentMessageId = _registrationMessageRegistry.FirstOrDefault(s =>
@@ -380,7 +380,12 @@ namespace UltraMafia.Frontend
 
         private async Task<string> ProcessLeaveCommand(Message message)
         {
-            throw new NotImplementedException();
+            // 1. should check this message from public chat
+            // 2. resolve room by massage.Chat.Id
+            // 3. resolve gamer by message.From.UserId
+            // 4. Call GameService LeaveGameHandler (room, gamer);
+            // 5. If it returns nothing, it's ok. otherwise return error.
+            return "Good bye";
         }
 
         private async Task<string> ProcessStopCommand(Message message)
