@@ -4,7 +4,6 @@ namespace UltraMafia.DAL.Enums
     {
         Killing,
         Checkup,
-        Healing,
-        TellingLastWords
+        Healing
     }
 }

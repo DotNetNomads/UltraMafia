@@ -6,6 +6,6 @@ namespace UltraMafia.DAL.Model
     {
         public string IdExternal { get; set; }
         public string NickName { get; set; }
-        public string PmChatId { get; set; }
+        public string PersonalRoomId { get; set; }
     }
 }
