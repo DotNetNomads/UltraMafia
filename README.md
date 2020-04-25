@@ -1,5 +1,6 @@
-# UltraMafia - Open Source Mafia Game Bot
-
+UltraMafia
+==========
+The first OpenSource Mafia Bot!
 ## General info
 
 ## Dependencies
