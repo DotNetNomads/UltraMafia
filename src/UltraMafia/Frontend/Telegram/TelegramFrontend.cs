@@ -6,8 +6,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Internal;
-using Newtonsoft.Json;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Exceptions;
@@ -18,9 +16,10 @@ using UltraMafia.DAL;
 using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Model;
 using UltraMafia.GameModel;
+using UltraMafia.Helpers;
 using static UltraMafia.DAL.Enums.GameActions;
 
-namespace UltraMafia.Frontend
+namespace UltraMafia.Frontend.Telegram
 {
     public class TelegramFrontend : IFrontend
     {

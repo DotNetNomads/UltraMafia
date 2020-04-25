@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using UltraMafia.DAL;
 using UltraMafia.Frontend;
+using UltraMafia.Helpers;
 
 namespace UltraMafia
 {
@@ -18,7 +19,10 @@ namespace UltraMafia
     {
         public Startup()
         {
-            Configuration = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
+            Configuration = new ConfigurationBuilder()
+                .AddJsonFile("settings.json")
+                .AddEnvironmentVariables("mafia_")
+                .Build();
         }
 
         private IConfigurationRoot Configuration { get; set; }
@@ -27,7 +31,7 @@ namespace UltraMafia
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddDbContext<GameDbContext>(c => c.UseInMemoryDatabase("MafiaGame"));
+            services.AddDb(Configuration);
             services.AddMafiaGame(Configuration);
         }
 

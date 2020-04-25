@@ -1,8 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia", "UltraMafia.csproj", "{730C4A3A-5CCA-43FF-8B4C-202C15595917}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia", "src\UltraMafia\UltraMafia.csproj", "{730C4A3A-5CCA-43FF-8B4C-202C15595917}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.DAL", "UltraMafia.DAL\UltraMafia.DAL.csproj", "{BB875909-72F0-4E28-B7F5-496BF15D3CC0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.DAL", "src\UltraMafia.DAL\UltraMafia.DAL.csproj", "{BB875909-72F0-4E28-B7F5-496BF15D3CC0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

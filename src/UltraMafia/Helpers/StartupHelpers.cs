@@ -1,10 +1,13 @@
 using System;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using UltraMafia.DAL;
 using UltraMafia.Frontend;
+using UltraMafia.Frontend.Telegram;
 
-namespace UltraMafia
+namespace UltraMafia.Helpers
 {
     public static class StartupHelpers
     {
@@ -34,6 +37,17 @@ namespace UltraMafia
             services.AddSingleton(s => gameSettings);
             services.AddScoped<IFrontend, TelegramFrontend>();
             services.AddScoped<GameService>();
+        }
+
+        public static void AddDb(this IServiceCollection services, IConfiguration config)
+        {
+            var dbSettings = new DbSettings();
+            config.GetSection("Db").Bind(dbSettings);
+            var connectionString =
+                $"Server={dbSettings.Host};Port={dbSettings.Port};Database={dbSettings.DbName};Uid={dbSettings.User};Pwd={dbSettings.Password};";
+            services.AddDbContext<GameDbContext>(c => c
+                    .UseMySql(connectionString, a => a.MigrationsAssembly("UltraMafia.DAL")),
+                ServiceLifetime.Transient);
         }
     }
 }

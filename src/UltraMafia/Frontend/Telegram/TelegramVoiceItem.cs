@@ -1,6 +1,4 @@
-using System;
-
-namespace UltraMafia.Frontend
+namespace UltraMafia.Frontend.Telegram
 {
     public struct TelegramVoiceItem
     {
