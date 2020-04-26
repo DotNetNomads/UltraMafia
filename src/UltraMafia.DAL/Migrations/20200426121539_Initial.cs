@@ -46,7 +46,7 @@ namespace UltraMafia.DAL.Migrations
                     RoomId = table.Column<int>(nullable: false),
                     StartedOn = table.Column<DateTime>(nullable: false),
                     FinishedOn = table.Column<DateTime>(nullable: false),
-                    State = table.Column<int>(nullable: false),
+                    State = table.Column<string>(nullable: false),
                     CreatedByGamerAccountId = table.Column<int>(nullable: false)
                 },
                 constraints: table =>
@@ -76,7 +76,7 @@ namespace UltraMafia.DAL.Migrations
                     GamerAccountId = table.Column<int>(nullable: false),
                     IsDead = table.Column<bool>(nullable: false),
                     IsWin = table.Column<bool>(nullable: false),
-                    Role = table.Column<int>(nullable: false)
+                    Role = table.Column<string>(nullable: false)
                 },
                 constraints: table =>
                 {

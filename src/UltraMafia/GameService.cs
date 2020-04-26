@@ -5,8 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Internal;
-using UltraMafia.DAL;
+using Serilog;
 using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Model;
 using UltraMafia.Frontend;
@@ -18,178 +17,332 @@ namespace UltraMafia
     public class GameService
     {
         private readonly IFrontend _frontend;
-        private readonly GameDbContext _dataContext;
         private readonly GameSettings _gameSettings;
         private int _minimalGamerCount;
+        private readonly IServiceProvider _serviceProvider;
 
-        public GameService(IFrontend frontend, GameDbContext dataContext, GameSettings gameSettings)
+        public GameService(IFrontend frontend, GameSettings gameSettings, IServiceProvider serviceProvider)
         {
             _frontend = frontend;
-            _dataContext = dataContext;
             _gameSettings = gameSettings;
+            _serviceProvider = serviceProvider;
             _minimalGamerCount = _gameSettings.MinGamerCount < 4 ? 4 : _gameSettings.MinGamerCount;
         }
 
         public void ListenToEvents()
         {
-            _frontend.ActionHandler = ActionHandler;
-            _frontend.MessageHandler = MessageHandler;
-            _frontend.RegistrationHandler = RegistrationHandler;
-            _frontend.GameCreationHandler = GameCreationHandler;
-            _frontend.GameStartHandler = GameStartHandler;
-            _frontend.StopGameHandler = StopGameHandler;
-            _frontend.EnableGame();
+            _frontend.GameJoinRequest += GameJoinHandler;
+            _frontend.GameCreationRequest += GameCreationHandler;
+            _frontend.GameStartRequest += GameStartHandler;
+            _frontend.GameStopRequest += GameStopHandler;
+            _frontend.ActivateFrontend();
         }
 
-        private async Task<GameSession> StopGameHandler(GameRoom room, GamerAccount callerAccount)
+        public void CheckDatabase()
         {
-            var session =
-                await _dataContext.GameSessions.FirstOrDefaultAsync(s =>
-                    s.RoomId == room.Id && s.State != GameSessionStates.GameOver);
-            if (session == null)
-            {
-                throw new Exception("Игры нет, сначала создай ее, а потом закрывай)");
-            }
-
-            if (session.State == GameSessionStates.Playing)
-            {
-                throw new Exception("Нельзя так! Народ играет!");
-            }
-
-            if (session.CreatedByGamerAccountId != callerAccount.Id)
-            {
-                throw new Exception("Игру может удалить только ее создатель!");
-            }
-
-            _dataContext.Remove(session);
-            await _dataContext.SaveChangesAsync();
-            return session;
+            using var dbContextAccessor = _serviceProvider.GetDbContext();
+            Log.Information("Cleaning up database...");
+            dbContextAccessor.DbContext.Database.ExecuteSqlRaw(
+                "update `GameSessions` set `State`='ForceFinished' where `State`='Playing'");
+            Log.Information("Database is cleaned from old sessions");
         }
 
-        private async Task<GameSession> GameStartHandler(GameRoom room)
+        private async void GameStopHandler((int roomId, int gamerId) stopInfo)
         {
-            var session =
-                await _dataContext.GameSessions
-                    .Include(s => s.GameMembers)
-                    .Include("GameMembers.GamerAccount")
-                    .FirstOrDefaultAsync(s =>
-                        s.RoomId == room.Id && s.State != GameSessionStates.GameOver);
-            if (session == null)
-                throw new Exception("Нет игры которую можно начать. Сначала создайте её!");
-            if (session.State == GameSessionStates.Playing)
-                throw new Exception("Игра уже играется) Играй чёрт тебя побери)");
-            if (session.GameMembers.Count < _minimalGamerCount)
-                throw new Exception($"Не хватает игроков, минимальное количество для старта: {_minimalGamerCount}");
-            ResolveRoles(session);
-            await _frontend.SendMessageToRoom(session.Room,
-                $"Игра начинается! Количество игроков мафиози: {session.GameMembers.Count(m => m.Role == GameRoles.Mafia)}");
-            session.State = GameSessionStates.Playing;
-            await _dataContext.SaveChangesAsync();
-            RunGame(session);
-            return session;
-        }
-
-        private void RunGame(GameSession session)
-        {
-            Task.Run(async () =>
+            try
             {
-                try
+                GameSession session;
+                GameRoom room;
+                using (var dbContextAccessor = _serviceProvider.GetDbContext())
                 {
-                    // game timer
-                    var stopwatch = new Stopwatch();
-                    stopwatch.Start();
-
-                    await SendIntroduceMessages(session.GameMembers);
-                    var dayNumber = 1;
-                    while (true)
+                    var (roomId, gamerId) = stopInfo;
+                    room = await dbContextAccessor.DbContext.GameRooms.FindAsync(roomId);
+                    session =
+                        await dbContextAccessor.DbContext.GameSessions.FirstOrDefaultAsync(s =>
+                            s.RoomId == roomId &&
+                            !new[] {GameSessionStates.GameOver, GameSessionStates.ForceFinished}.Contains(s.State));
+                    if (session == null)
                     {
-                        #region Night logic
+                        await _frontend.SendMessageToRoom(room, "Игры нет, сначала создай ее, а потом закрывай)");
+                        return;
+                    }
 
-                        var nightKillsCount = 0;
-                        await _frontend.SendMessageToRoom(session.Room,
-                            $@"
+                    if (session.State == GameSessionStates.Playing)
+                    {
+                        await _frontend.SendMessageToRoom(room, "Нельзя так! Народ играет!");
+                        return;
+                    }
+
+                    if (session.CreatedByGamerAccountId != gamerId)
+                    {
+                        await _frontend.SendMessageToRoom(room, "Игру может удалить только ее создатель!");
+                        return;
+                    }
+
+                    dbContextAccessor.DbContext.Remove(session);
+                    await dbContextAccessor.DbContext.SaveChangesAsync();
+                }
+
+                session.Room = room;
+                await _frontend.SendMessageToRoom(session.Room, "Регистрация на игру остановлена!");
+                _frontend.OnGameRegistrationStopped(session);
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Error occured when stopping game");
+            }
+        }
+
+        private async void GameStartHandler(int roomId)
+        {
+            try
+            {
+                GameSession session;
+                GameRoom room;
+                using (var dbContextAccessor = _serviceProvider.GetDbContext())
+                {
+                    room = await dbContextAccessor.DbContext.GameRooms.FindAsync(roomId);
+                    session =
+                        await dbContextAccessor.DbContext.GameSessions
+                            .FirstOrDefaultAsync(s =>
+                                s.RoomId == roomId &&
+                                !new[] {GameSessionStates.GameOver, GameSessionStates.ForceFinished}.Contains(s.State));
+                    if (session == null)
+                    {
+                        await _frontend.SendMessageToRoom(room, "Нет игры которую можно начать. Сначала создайте её!");
+                        return;
+                    }
+
+                    if (session.State == GameSessionStates.Playing)
+                    {
+                        await _frontend.SendMessageToRoom(room, "Игра уже играется) Играй чёрт тебя побери)");
+                        return;
+                    }
+
+                    if (await dbContextAccessor.DbContext.GameSessionMembers.CountAsync(gm =>
+                        gm.GameSessionId == session.Id) < _minimalGamerCount)
+                    {
+                        await _frontend.SendMessageToRoom(room,
+                            $"Не хватает игроков, минимальное количество для старта: {_minimalGamerCount}");
+                        return;
+                    }
+
+                    await dbContextAccessor.DbContext.Entry(session).Collection(c => c.GameMembers).LoadAsync();
+                    ResolveRoles(session);
+                    session.State = GameSessionStates.Playing;
+                    await dbContextAccessor.DbContext.SaveChangesAsync();
+                }
+
+                session.Room = room;
+                await _frontend.SendMessageToRoom(session.Room,
+                    $"Игра начинается! Количество игроков мафиози: {session.GameMembers.Count(m => m.Role == GameRoles.Mafia)}");
+                _frontend.OnGameStarted(session);
+
+                RunGame(session.Id);
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Error occured when starting a game");
+            }
+        }
+
+        private async void GameCreationHandler((int roomId, int gamerId) creationInfo)
+        {
+            try
+            {
+                GameSession createdSession;
+                using (var dbContextAccessor = _serviceProvider.GetDbContext())
+                {
+                    // trying to find existing session
+                    var sessionExists = await dbContextAccessor.DbContext.GameSessions
+                        .AnyAsync(i =>
+                            i.RoomId == creationInfo.roomId &&
+                            new[] {GameSessionStates.Playing, GameSessionStates.Registration}.Contains(i.State));
+                    if (sessionExists)
+                    {
+                        var room = await dbContextAccessor.DbContext.GameRooms.FindAsync(creationInfo.roomId);
+                        await _frontend.SendMessageToRoom(room, "Нельзя создавать игру там где она уже есть :)");
+                        return;
+                    }
+
+                    createdSession = new GameSession
+                    {
+                        RoomId = creationInfo.roomId,
+                        State = GameSessionStates.Registration,
+                        CreatedByGamerAccountId = creationInfo.roomId
+                    };
+                    await dbContextAccessor.DbContext.AddAsync(createdSession);
+                    await dbContextAccessor.DbContext.SaveChangesAsync();
+                    await dbContextAccessor.DbContext.Entry(createdSession)
+                        .Reference(m => m.Room).LoadAsync();
+                    await dbContextAccessor.DbContext.Entry(createdSession)
+                        .Reference(m => m.CreatedByGamerAccount).LoadAsync();
+                }
+
+                _frontend.OnGameSessionCreated(createdSession);
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Error occured when creating a game");
+            }
+        }
+
+        private async void GameJoinHandler((int roomId, int gamerId) joinInfo)
+        {
+            try
+            {
+                GameSession currentSession;
+                GamerAccount joinedGamerAccount;
+                using (var dbContextAccessor = _serviceProvider.GetDbContext())
+                {
+                    joinedGamerAccount = await dbContextAccessor.DbContext.GamerAccounts.FindAsync(joinInfo.gamerId);
+                    currentSession = await dbContextAccessor.DbContext.GameSessions
+                        .Include(s => s.GameMembers)
+                        .Include(s => s.Room)
+                        .FirstOrDefaultAsync(g =>
+                            g.RoomId == joinInfo.roomId &&
+                            !new[] {GameSessionStates.GameOver, GameSessionStates.ForceFinished}.Contains(g.State));
+                    if (currentSession == null)
+                    {
+                        await _frontend.SendMessageToGamer(joinedGamerAccount,
+                            "Игры в данной комнате не существует. Необходимо создать ее.");
+                        return;
+                    }
+
+                    if (currentSession.State != GameSessionStates.Registration)
+                    {
+                        await _frontend.SendMessageToGamer(joinedGamerAccount,
+                            "Нельзя зарегистрироваться, игра уже идет");
+                        return;
+                    }
+
+                    if (!_gameSettings.DevelopmentMode &&
+                        currentSession.GameMembers.Any(gm => gm.GamerAccountId == joinInfo.gamerId))
+                    {
+                        await _frontend.SendMessageToGamer(joinedGamerAccount, "Да ты уже в игре! Жди :)");
+                        return;
+                    }
+
+                    currentSession.GameMembers.Add(new GameSessionMember
+                    {
+                        GamerAccountId = joinInfo.gamerId,
+                        GameSessionId = currentSession.Id
+                    });
+                    await dbContextAccessor.DbContext.SaveChangesAsync();
+
+                    await dbContextAccessor.DbContext.Entry(currentSession).Collection(s => s.GameMembers).Query()
+                        .Include(gm => gm.GamerAccount).LoadAsync();
+                }
+
+                _frontend.OnGamerJoined(currentSession, joinedGamerAccount);
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Error occured when user tried to join a game");
+            }
+        }
+
+        private async void RunGame(int sessionId)
+        {
+            try
+            {
+                using var dbContextAccessor = _serviceProvider.GetDbContext();
+                var session = dbContextAccessor.DbContext
+                    .GameSessions
+                    .Include(g => g.Room)
+                    .Include("GameMembers.GamerAccount")
+                    .First(s => s.Id == sessionId);
+                // game timer
+                var stopwatch = new Stopwatch();
+                stopwatch.Start();
+
+                await SendIntroduceMessages(session.GameMembers);
+                var dayNumber = 1;
+                while (true)
+                {
+                    #region Night logic
+
+                    var nightKillsCount = 0;
+                    await _frontend.SendMessageToRoom(session.Room,
+                        $@"
 <b>Ночь #{dayNumber}</b> 🌃  
 На улицах очень тихо, но это пока.
 
 <b>Игроки</b>: 
 {session.GetMembersInfo(false, true)}
 ", true);
-                        await Task.Delay(5000);
-                        var doctorActionTask = AskDoctorForAction(session).ConfigureAwait(false);
-                        var mafiaActionTask = AskMafiaForAction(session).ConfigureAwait(false);
-                        var copActionTask = AskCopForAction(session).ConfigureAwait(false);
+                    await Task.Delay(3000);
+                    var doctorActionTask = AskDoctorForAction(session).ConfigureAwait(false);
+                    await Task.Delay(2000);
+                    var mafiaActionTask = AskMafiaForAction(session).ConfigureAwait(false);
+                    await Task.Delay(2000);
+                    var copActionTask = AskCopForAction(session).ConfigureAwait(false);
 
-                        // resolving actions
-                        var doctorAction = await doctorActionTask;
-                        GameSessionMember healingTarget = null;
-                        if (doctorAction.Action != null)
-                        {
-                            healingTarget = doctorAction.Target;
-                            await HealGamer(healingTarget);
-                        }
+                    // resolving actions
+                    var doctorAction = await doctorActionTask;
+                    GameSessionMember healingTarget = null;
+                    if (doctorAction.Action != null)
+                    {
+                        healingTarget = doctorAction.Target;
+                        await HealGamer(healingTarget);
+                    }
 
-                        await Task.Delay(2000);
+                    var copAction = await copActionTask;
+                    switch (copAction.Action)
+                    {
+                        case GameActions.Killing:
+                            if (await KillGamer(session, GameRoles.Cop, copAction.Target, healingTarget))
+                            {
+                                nightKillsCount++;
+                            }
 
-                        var copAction = await copActionTask;
-                        switch (copAction.Action)
-                        {
-                            case GameActions.Killing:
-                                if (await KillGamer(session, GameRoles.Cop, copAction.Target, healingTarget))
-                                {
-                                    nightKillsCount++;
-                                }
-
-                                break;
-                            case GameActions.Checkup:
-                                await InspectGamer(session, GameRoles.Cop, copAction.Target);
-                                break;
-                            case null:
-                                // nothing to do, maybe cop is dead? (or he sleeps)
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
-                        }
-
-                        await Task.Delay(2000);
-                        var mafiaAction = await mafiaActionTask;
-                        switch (mafiaAction.Action)
-                        {
-                            case GameActions.Killing:
-                                if (await KillGamer(session, GameRoles.Mafia, mafiaAction.Target, healingTarget))
-                                {
-                                    nightKillsCount++;
-                                }
-
-                                break;
-                            case GameActions.Checkup:
-                                await InspectGamer(session, GameRoles.Mafia, mafiaAction.Target);
-                                break;
-                            case null:
-                                // nothing to do, maybe mafia sleeps?
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
-                        }
-
-                        if (nightKillsCount == 0)
-                        {
-                            await _frontend.SendMessageToRoom(session.Room, "Удивительно. Все остались живы.");
-                        }
-
-                        #endregion
-
-                        await Task.Delay(2000);
-
-                        // ensure this game is over
-                        if (await IsGameOver(session, stopwatch))
                             break;
+                        case GameActions.Checkup:
+                            await InspectGamer(session, GameRoles.Cop, copAction.Target);
+                            break;
+                        case null:
+                            // nothing to do, maybe cop is dead? (or he sleeps)
+                            break;
+                        default:
+                            throw new ArgumentOutOfRangeException();
+                    }
 
-                        await Task.Delay(2000);
+                    var mafiaAction = await mafiaActionTask;
+                    switch (mafiaAction.Action)
+                    {
+                        case GameActions.Killing:
+                            if (await KillGamer(session, GameRoles.Mafia, mafiaAction.Target, healingTarget))
+                            {
+                                nightKillsCount++;
+                            }
 
-                        #region Day logic
+                            break;
+                        case GameActions.Checkup:
+                            await InspectGamer(session, GameRoles.Mafia, mafiaAction.Target);
+                            break;
+                        case null:
+                            // nothing to do, maybe mafia sleeps?
+                            break;
+                        default:
+                            throw new ArgumentOutOfRangeException();
+                    }
 
-                        await _frontend.SendMessageToRoom(session.Room,
-                            $@"
+                    if (nightKillsCount == 0)
+                    {
+                        await _frontend.SendMessageToRoom(session.Room, "Удивительно. Все остались живы.");
+                    }
+
+                    #endregion
+
+                    await Task.Delay(3000);
+                    // ensure this game is over
+                    if (await IsGameOver(session, stopwatch))
+                        break;
+
+                    #region Day logic
+
+                    await _frontend.SendMessageToRoom(session.Room,
+                        $@"
 День #{dayNumber} ☀️
 Все проснулись под птение птичек. 
 Пришло время наказать мафию.
@@ -198,50 +351,49 @@ namespace UltraMafia
 {session.GetMembersInfo(false, true)}
 
 А теперь давайте обсудим прошедшую ночь, затем будем голосовать. 
-Время на обсуждение: 2 минуты.
+Время на обсуждение: 1 минута 30 секунд.
 ", true);
 
-                        await Task.Delay(120000);
-                        var gamerForLynch = await PublicLynchVote(session);
+                    await Task.Delay(_gameSettings.DevelopmentMode ? 2000 : 90000);
+                    var gamerForLynch = await PublicLynchVote(session);
 
-                        if (gamerForLynch != null)
+                    if (gamerForLynch != null)
+                    {
+                        var lynchApproved = await ApproveLynch(session, gamerForLynch);
+                        if (lynchApproved)
                         {
-                            var lynchApproved = await ApproveLynch(session, gamerForLynch);
-                            if (lynchApproved)
-                            {
-                                await _frontend.SendMessageToRoom(session.Room,
-                                    @$"Вешаем {gamerForLynch.GamerAccount.NickName}...");
-                                await KillGamer(session, GameRoles.Citizen, gamerForLynch, null);
-                            }
-                            else
-                            {
-                                await _frontend.SendMessageToRoom(session.Room,
-                                    $@"Это удивительно, {gamerForLynch.GamerAccount.NickName} был на волоске от смерти. 
-Граждане решили предоставить ему шанс.");
-                            }
+                            await _frontend.SendMessageToRoom(session.Room,
+                                @$"Вешаем {gamerForLynch.GamerAccount.NickName}...");
+                            await KillGamer(session, GameRoles.Citizen, gamerForLynch, null);
                         }
                         else
                         {
                             await _frontend.SendMessageToRoom(session.Room,
-                                "Мнения жителей разошлись. Никого не будем вешать.");
+                                $@"Это удивительно, {gamerForLynch.GamerAccount.NickName} был на волоске от смерти. 
+Граждане решили предоставить ему шанс.");
                         }
-
-                        #endregion
-
-                        await Task.Delay(2000);
-                        // ensure this game is over
-                        if (await IsGameOver(session, stopwatch))
-                            break;
-                        dayNumber++;
-                        await Task.Delay(2000);
                     }
+                    else
+                    {
+                        await _frontend.SendMessageToRoom(session.Room,
+                            "Мнения жителей разошлись. Никого не будем вешать.");
+                    }
+
+                    #endregion
+
+                    await Task.Delay(3000);
+                    // ensure this game is over
+                    if (await IsGameOver(session, stopwatch))
+                        break;
+                    dayNumber++;
                 }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                    throw;
-                }
-            });
+
+                await dbContextAccessor.DbContext.SaveChangesAsync();
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Error occured in game process");
+            }
         }
 
         private async Task<bool> ApproveLynch(GameSession session, GameSessionMember gamerForLynch)
@@ -327,7 +479,6 @@ namespace UltraMafia
             await _frontend.SendMessageToRoom(session.Room, gameOverString.ToString(), true);
 
             session.State = GameSessionStates.GameOver;
-            await _dataContext.SaveChangesAsync();
 
             return true;
         }
@@ -399,7 +550,7 @@ namespace UltraMafia
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
+                Log.Error(e, "Error when tried process last words");
             }
         }
 
@@ -445,7 +596,6 @@ namespace UltraMafia
             var actionTasks = mafia
                 .Select(m => _frontend.AskMafiaForAction(m, availableGamers));
             var allActions = await Task.WhenAll(actionTasks);
-            await Task.Delay(5000);
             // trying to find top action
             var groupedActions = (from action in allActions
                 group action by new {target = action.Target, action = action.Action}
@@ -508,95 +658,38 @@ namespace UltraMafia
 
         private void ResolveRoles(GameSession session)
         {
-            // how many mafia in the game?
-            var resolveEnemyCount = (int) Math.Truncate(session.GameMembers.Count / (double) _minimalGamerCount);
-            // copy original list
-            var gamersToResolve = session.GameMembers.ToList();
-            // resolving enemies
-            while (resolveEnemyCount > 0)
+            var players = session.GameMembers.ToList();
+
+            var enemyCount = (int) Math.Truncate(players.Count / (double) _minimalGamerCount);
+
+            GameRoles CalculateRole(int index)
             {
-                var enemy = gamersToResolve.Random();
-                enemy.Role = GameRoles.Mafia;
-                gamersToResolve.Remove(enemy);
-                resolveEnemyCount--;
+                if (index < enemyCount)
+                    return GameRoles.Mafia;
+                else if (index == enemyCount)
+                    return GameRoles.Doctor;
+                else if (index == enemyCount + 1)
+                    return GameRoles.Cop;
+                else
+                    return GameRoles.Citizen;
             }
 
-            // resolving a doctor
-            var doctor = gamersToResolve.Random();
-            doctor.Role = GameRoles.Doctor;
-            gamersToResolve.Remove(doctor);
-            // is there cop? we can resolve cop,
-            // only if there are at least 3 players without role.
-            if (gamersToResolve.Count > 2)
-            {
-                var cop = gamersToResolve.Random();
-                cop.Role = GameRoles.Cop;
-                gamersToResolve.Remove(cop);
-            }
+            var roles = Enumerable.Range(0, players.Count)
+                .Select(CalculateRole)
+                .ToList();
 
-            // another gamers are citizens :)
-            gamersToResolve.ForEach(g => g.Role = GameRoles.Citizen);
-        }
+            var r = new Random();
 
-        private async Task<GameSession> GameCreationHandler(GameRoom room, GamerAccount createdByAccount)
-        {
-            // trying to find existing session
-            var sessionExists = _dataContext.GameSessions
-                .Any(i =>
-                    i.RoomId == room.Id &&
-                    new[] {GameSessionStates.Playing, GameSessionStates.Registration}.Contains(i.State));
-            if (sessionExists)
-            {
-                throw new Exception("Нельзя создавать игру там где она уже есть :)");
-            }
+            var reorderedPlayers = players.Select(x => new
+                {
+                    Index = r.Next(),
+                    Item = x
+                })
+                .OrderBy(x => x.Index)
+                .ToList();
 
-            var session = new GameSession
-            {
-                RoomId = room.Id,
-                Room = room,
-                State = GameSessionStates.Registration,
-                CreatedByGamerAccountId = createdByAccount.Id,
-                CreatedByGamerAccount = createdByAccount
-            };
-            await _dataContext.AddAsync(session);
-            await _dataContext.SaveChangesAsync();
-            return session;
-        }
-
-        private async Task<GameSession> RegistrationHandler(GameRoom room, GamerAccount account)
-        {
-            var session = await _dataContext.GameSessions
-                .Include(r => r.Room)
-                .Include("GameMembers.GamerAccount")
-                .FirstOrDefaultAsync(g => g.RoomId == room.Id && g.State != GameSessionStates.GameOver);
-            if (session == null)
-                throw new Exception("Игры в данной комнате не существует. Необходимо создать ее.");
-
-            if (session.State != GameSessionStates.Registration)
-                throw new Exception("Нельзя зарегистрироваться, игра уже идет");
-
-            if (session.GameMembers.Any(gm => gm.GamerAccountId == account.Id))
-                throw new Exception("Да ты уже в игре! Жди :)");
-
-            session.GameMembers.Add(new GameSessionMember
-            {
-                GamerAccountId = account.Id,
-                GameSessionId = session.Id
-            });
-            await _dataContext.SaveChangesAsync();
-            await _frontend.SendMessageToRoom(session.Room, $"{account.NickName}, красавчик, в деле!");
-            return session;
-        }
-
-        private Task MessageHandler(GamerAccount gamer, string message)
-        {
-            throw new System.NotImplementedException();
-        }
-
-        private Task ActionHandler(
-            (GameRoom room, GamerAccount gamerFrom, GameActions action, GamerAccount target) actionInfo)
-        {
-            throw new NullReferenceException();
+            for (var i = 0; i < players.Count; i++)
+                reorderedPlayers[i].Item.Role = roles[i];
         }
     }
 }

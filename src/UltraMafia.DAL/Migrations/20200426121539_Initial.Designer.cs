@@ -9,7 +9,7 @@ using UltraMafia.DAL;
 namespace UltraMafia.DAL.Migrations
 {
     [DbContext(typeof(GameDbContext))]
-    [Migration("20200425094536_Initial")]
+    [Migration("20200426121539_Initial")]
     partial class Initial
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -56,8 +56,9 @@ namespace UltraMafia.DAL.Migrations
                     b.Property<DateTime>("StartedOn")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<int>("State")
-                        .HasColumnType("int");
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.HasKey("Id");
 
@@ -86,8 +87,9 @@ namespace UltraMafia.DAL.Migrations
                     b.Property<bool>("IsWin")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<int>("Role")
-                        .HasColumnType("int");
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.HasKey("Id");
 

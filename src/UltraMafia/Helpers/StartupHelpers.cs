@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using UltraMafia.DAL;
 using UltraMafia.Frontend;
 using UltraMafia.Frontend.Telegram;
@@ -16,13 +17,14 @@ namespace UltraMafia.Helpers
             var scope = app.ApplicationServices.CreateScope();
             try
             {
-                Console.WriteLine("Starting game...");
+                Log.Information("Starting mafia game...");
                 var service = scope.ServiceProvider.GetService<GameService>();
+                service.CheckDatabase();
                 service.ListenToEvents();
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine(ex.Message);
+                Log.Error(ex, "Error occured");
                 scope.Dispose();
             }
         }
@@ -43,11 +45,11 @@ namespace UltraMafia.Helpers
         {
             var dbSettings = new DbSettings();
             config.GetSection("Db").Bind(dbSettings);
+            Log.Debug("Using following settings for DB: host {0}, db {1}", dbSettings.Host, dbSettings.DbName);
             var connectionString =
                 $"Server={dbSettings.Host};Port={dbSettings.Port};Database={dbSettings.DbName};Uid={dbSettings.User};Pwd={dbSettings.Password};";
             services.AddDbContext<GameDbContext>(c => c
-                    .UseMySql(connectionString, a => a.MigrationsAssembly("UltraMafia.DAL")),
-                ServiceLifetime.Transient);
+                .UseMySql(connectionString, a => a.MigrationsAssembly("UltraMafia.DAL")));
         }
     }
 }

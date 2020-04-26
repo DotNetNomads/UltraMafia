@@ -13,5 +13,8 @@
   "Game": {
     "MinGamerCount": 4,
     "DevelopmentMode": false
+  },
+  "Serilog": {
+    "MinimumLevel": "Debug"
   }
 }
