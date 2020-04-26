@@ -169,7 +169,7 @@ namespace UltraMafia
                     {
                         RoomId = creationInfo.roomId,
                         State = GameSessionStates.Registration,
-                        CreatedByGamerAccountId = creationInfo.roomId
+                        CreatedByGamerAccountId = creationInfo.gamerId
                     };
                     await dbContextAccessor.DbContext.AddAsync(createdSession);
                     await dbContextAccessor.DbContext.SaveChangesAsync();
@@ -232,6 +232,8 @@ namespace UltraMafia
 
                     await dbContextAccessor.DbContext.Entry(currentSession).Collection(s => s.GameMembers).Query()
                         .Include(gm => gm.GamerAccount).LoadAsync();
+                    await dbContextAccessor.DbContext.Entry(currentSession).Reference(s => s.CreatedByGamerAccount)
+                        .LoadAsync();
                 }
 
                 _frontend.OnGamerJoined(currentSession, joinedGamerAccount);
