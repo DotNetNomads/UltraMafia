@@ -4,6 +4,7 @@ namespace UltraMafia.DAL.Enums
     {
         Registration,
         Playing,
-        GameOver
+        GameOver,
+        ForceFinished
     }
 }

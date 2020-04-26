@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace UltraMafia.Frontend
+namespace UltraMafia.Frontend.Telegram
 {
     public class TelegramVote
     {

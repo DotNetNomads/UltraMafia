@@ -1,0 +1,37 @@
+version: '3'
+services:
+  mysql:
+    image: "mysql:8"
+    environment:
+       MYSQL_ROOT_PASSWORD: root
+       MYSQL_DATABASE: ultra-mafia
+    networks:
+      - apps
+  mafia-migrator:
+    build: ./
+    image: dotnet-nomads/ultra-mafia:dev
+    restart: "on-failure"
+    networks:
+      - apps
+    command: UltraMafia.dll /seed
+    environment: 
+      "mafia_Db__Host": "mysql"
+      "mafia_Db__User": "root"
+      "mafia_Db__Password": "root"
+      "mafia_Db__DbName": "ultra-mafia"
+  mafia-game:
+    restart: "always"
+    build: ./
+    image: dotnet-nomads/ultra-mafia:dev
+    networks:
+      - apps
+    environment: 
+      "mafia_Db__Host": "mysql"
+      "mafia_Db__User": "root"
+      "mafia_Db__Password": "root"
+      "mafia_Db__DbName": "ultra-mafia"
+      "mafia_Frontend__Token": "place-your-token"
+      "mafia_Frontend__BotUserName": "place-your-bot-username"
+      "mafia_Game__DevelopmentMode": "true"
+networks:
+  apps:

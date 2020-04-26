@@ -1,16 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using UltraMafia.DAL;
-using UltraMafia.Frontend;
+using Serilog;
+using UltraMafia.Helpers;
 
 namespace UltraMafia
 {
@@ -18,8 +11,16 @@ namespace UltraMafia
     {
         public Startup()
         {
-            Configuration = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
+            Configuration = new ConfigurationBuilder()
+                .AddJsonFile("settings.json")
+                .AddEnvironmentVariables("mafia_")
+                .Build();
+            Log.Logger = new LoggerConfiguration()
+                .ReadFrom.Configuration(Configuration)
+                .WriteTo.Console()
+                .CreateLogger();
         }
+
 
         private IConfigurationRoot Configuration { get; set; }
 
@@ -27,14 +28,11 @@ namespace UltraMafia
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddDbContext<GameDbContext>(c => c.UseInMemoryDatabase("MafiaGame"));
+            services.AddDb(Configuration);
             services.AddMafiaGame(Configuration);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-        {
-            app.UseMafiaGame();
-        }
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env) => app.UseMafiaGame();
     }
 }

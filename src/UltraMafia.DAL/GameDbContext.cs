@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Model;
 
 namespace UltraMafia.DAL
@@ -28,6 +30,8 @@ namespace UltraMafia.DAL
                         .HasOne(gs => gs.CreatedByGamerAccount)
                         .WithMany()
                         .HasForeignKey(m => m.CreatedByGamerAccountId);
+                    gameSession.Property(p => p.State).IsRequired()
+                        .HasConversion(new EnumToStringConverter<GameSessionStates>());
                 });
             modelBuilder
                 .Entity<GameSessionMember>(sessionMember =>
@@ -36,6 +40,8 @@ namespace UltraMafia.DAL
                         .HasOne(m => m.GamerAccount)
                         .WithMany()
                         .HasForeignKey(m => m.GamerAccountId);
+                    sessionMember.Property(p => p.Role)
+                        .HasConversion(new EnumToStringConverter<GameRoles>());
                 });
         }
 
