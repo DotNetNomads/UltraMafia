@@ -14,7 +14,7 @@ This project depends on:
 ### From sources
 This project developed on C# and builds under .NET Core 3.1. To run project, set settings by updating `settings.json`. Settings info available after this section.
 ### With Docker
-You can get our images from [Docker Hub](https://hub.docker.com/u/dotnetnomads).
+You can get our images from [Docker Hub](https://hub.docker.com/u/dotnetnomads) or just `docker pull dotnetnomads/ultra-mafia-bot`.
 If you want setup development environment use `docker-compose up` in project folder.
 You can change setting by setting environment variables, sample from `docker-compose.yml`:
 ```
