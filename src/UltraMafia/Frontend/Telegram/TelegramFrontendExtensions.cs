@@ -37,7 +37,7 @@ namespace UltraMafia.Frontend.Telegram
         {
             var user = message.From;
             var userId = user.Id;
-            var userChatId = message.Chat.Type == ChatType.Private ? message.Chat.Id : 0;
+            var userChatId = message.Chat.Type == ChatType.Private ? message.Chat.Id.ToString() : "0";
             var nickName = user switch
             {
                 _ when user.FirstName != null && user.LastName != null => $"{user.FirstName} {user.LastName}",
@@ -47,23 +47,28 @@ namespace UltraMafia.Frontend.Telegram
             };
             var gamerAccount = await context.GamerAccounts.FirstOrDefaultAsync(g =>
                 g.IdExternal == userId.ToString());
+            Log.Debug("Resolving gamer account for userId={0}, name={1}, chatId={2}", userId, nickName, userChatId);
             if (gamerAccount != null)
             {
-                if (nickName == gamerAccount.NickName && userChatId.ToString() == gamerAccount.PersonalRoomId)
+                Log.Debug("Gamer account with ID={0} loaded from database.", gamerAccount.Id);
+                if (nickName == gamerAccount.NickName &&
+                    (userChatId == gamerAccount.PersonalRoomId || userChatId == "0"))
                     return gamerAccount;
+                Log.Debug("Info updated nickName={0}=>{1} personalRoomId={2}=>{3}", gamerAccount.NickName, nickName,
+                    gamerAccount.PersonalRoomId, userChatId);
                 gamerAccount.NickName = nickName;
-                gamerAccount.PersonalRoomId = userChatId.ToString();
+                gamerAccount.PersonalRoomId = userChatId;
                 await context.SaveChangesAsync();
 
                 return gamerAccount;
             }
-
             gamerAccount = new GamerAccount
             {
                 IdExternal = userId.ToString(),
-                PersonalRoomId = userChatId.ToString(),
+                PersonalRoomId = userChatId,
                 NickName = nickName
             };
+            Log.Debug("New gamer account created");
             await context.GamerAccounts.AddAsync(gamerAccount);
             await context.SaveChangesAsync();
 
@@ -93,7 +98,7 @@ namespace UltraMafia.Frontend.Telegram
             var messageInfo = RegistrationMessageRegistry.First(m =>
                 m.sessionId == session.Id);
             await bot.DeleteMessageAsync(session.Room.ExternalRoomId, messageInfo.messageId);
-                RegistrationMessageRegistry.Remove(messageInfo);
+            RegistrationMessageRegistry.Remove(messageInfo);
         }
 
         public static void EnsurePublicChat(this Message message)
