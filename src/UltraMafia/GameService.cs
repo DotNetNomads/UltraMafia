@@ -18,8 +18,9 @@ namespace UltraMafia
     {
         private readonly IFrontend _frontend;
         private readonly GameSettings _gameSettings;
-        private int _minimalGamerCount;
+        private readonly int _minimalGamerCount;
         private readonly IServiceProvider _serviceProvider;
+        private readonly Dictionary<int, List<int>> _healedHimselfRegistry = new Dictionary<int, List<int>>();
 
         public GameService(IFrontend frontend, GameSettings gameSettings, IServiceProvider serviceProvider)
         {
@@ -248,6 +249,9 @@ namespace UltraMafia
         {
             try
             {
+                // creating doctor healing registry for session
+                _healedHimselfRegistry.Add(sessionId, new List<int>());
+
                 using var dbContextAccessor = _serviceProvider.GetDbContext();
                 var session = dbContextAccessor.DbContext
                     .GameSessions
@@ -395,6 +399,11 @@ namespace UltraMafia
             catch (Exception e)
             {
                 Log.Error(e, "Error occured in game process");
+            }
+            finally
+            {
+                // removing doctor self healing registry
+                _healedHimselfRegistry.Remove(sessionId);
             }
         }
 
@@ -582,12 +591,29 @@ namespace UltraMafia
             // there is no doctor (return nothing)
             if (doctor == null)
                 return new ActionDescriptor();
+            var selfHealingRegistry = _healedHimselfRegistry[session.Id];
+            var alreadyHealedHimself = selfHealingRegistry.Contains(doctor.Id);
             var aliveMembers = session.GetAliveMembers();
+            if (alreadyHealedHimself)
+            {
+                var allMembers = aliveMembers.ToList();
+                allMembers.Remove(doctor);
+                aliveMembers = allMembers.ToArray();
+            }
+
             var selectedAction = await _frontend.AskDoctorForAction(doctor, aliveMembers);
             await _frontend.SendMessageToRoom(session.Room,
                 selectedAction.Target != null
                     ? "Доктор вышел на ночное дежурство!"
                     : "Доктор не хочет выходить на службу :(");
+            
+            // doctor heals himself, we allow it only one time.
+            // we are going to log this action
+            if (selectedAction.Target?.Id == doctor.Id)
+            {
+                selfHealingRegistry.Add(doctor.Id);
+            }
+
             return selectedAction;
         }
 
@@ -661,8 +687,9 @@ namespace UltraMafia
         private void ResolveRoles(GameSession session)
         {
             var players = session.GameMembers.ToList();
+            var playersCount = players.Count;
 
-            var enemyCount = (int) Math.Truncate(players.Count / (double) _minimalGamerCount);
+            var enemyCount = (int) Math.Truncate(playersCount / (double) _minimalGamerCount);
 
             GameRoles CalculateRole(int index)
             {
@@ -670,7 +697,8 @@ namespace UltraMafia
                     return GameRoles.Mafia;
                 else if (index == enemyCount)
                     return GameRoles.Doctor;
-                else if (index == enemyCount + 1)
+                // we are creating cop position, only if count of gamers greater than 4
+                else if (playersCount > 4 && index == enemyCount + 1)
                     return GameRoles.Cop;
                 else
                     return GameRoles.Citizen;

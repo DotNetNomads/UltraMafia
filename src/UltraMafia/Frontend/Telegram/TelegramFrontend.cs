@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -164,7 +165,6 @@ namespace UltraMafia.Frontend.Telegram
             var text = message.Text;
 
             bool CommandMatch(string name) => text == $"/{name}" || text == $"/{name}@{_settings.BotUserName}";
-
             try
             {
                 if (text.StartsWith("/start"))
@@ -237,6 +237,8 @@ namespace UltraMafia.Frontend.Telegram
 
         private async Task ProcessGoCommand(Message message)
         {
+            
+            Log.Debug($"Processing go command from {message.From.Id}");
             int roomId;
             using (var dbContextAccessor = _serviceProvider.GetDbContext())
             {
@@ -249,6 +251,7 @@ namespace UltraMafia.Frontend.Telegram
 
         private async Task ProcessJoinCommand(Message message)
         {
+            Log.Debug($"Processing join command from {message.From.Id}");
             if (message.Chat.Type != ChatType.Private)
                 return;
             var messageSplit = message.Text.Split(' ');
@@ -318,7 +321,7 @@ namespace UltraMafia.Frontend.Telegram
                 if (important)
                 {
                     await Task.Delay(100);
-                    await _bot.PinChatMessageAsync(room.ExternalRoomId, messageObj.MessageId);
+                    await _bot.PinMessageIfAllowed(messageObj, CancellationToken.None);
                 }
             });
 
@@ -334,7 +337,7 @@ namespace UltraMafia.Frontend.Telegram
 
         public Task<ActionDescriptor> AskDoctorForAction(GameSessionMember doctor,
             GameSessionMember[] membersToSelect) => AskForAction(
-            "Уважаемый доктор. <b>Кого будем лечить?</b> 🚑",
+            "Уважаемый доктор. <b>Кого будем лечить?</b> 🚑 \n\n * - себя можно лечить только 1 раз за игру.",
             doctor,
             membersToSelect,
             (member, index) => new (GameActions?, string)[]
@@ -491,7 +494,7 @@ namespace UltraMafia.Frontend.Telegram
                         new InlineKeyboardMarkup(buttons)
                     );
                     await Task.Delay(100);
-                    await _bot.PinChatMessageAsync(roomId, message.MessageId);
+                    await _bot.PinMessageIfAllowed(message, CancellationToken.None);
                     telegramVote.SetMessageId(message.MessageId);
                 }
                 else
@@ -551,21 +554,22 @@ namespace UltraMafia.Frontend.Telegram
         }
 
         public void OnGameSessionCreated(GameSession session) =>
-            _bot.LockAndDo(() => _bot.CreateOrUpdateRegistrationMessage(session, _settings));
+            _bot.CreateRegistrationMessage(session, _settings);
 
-        public void OnGamerJoined(GameSession session, GamerAccount account) =>
-            _bot.LockAndDo(async () =>
+        public async void OnGamerJoined(GameSession session, GamerAccount account)
+        {
+            await _bot.LockAndDo(async () =>
             {
                 await _bot.SendTextMessageAsync(account.PersonalRoomId, "Ты в игре! :)");
-                await Task.Delay(100);
-                await _bot.CreateOrUpdateRegistrationMessage(session, _settings);
             });
+            await _bot.UpdateRegistrationMessage(session, _settings);
+        }
 
         public void OnGameStarted(GameSession session) =>
-            _bot.LockAndDo(() => _bot.RemoveRegistrationMessage(session));
+            _bot.RemoveRegistrationMessage(session);
 
         public void OnGameRegistrationStopped(GameSession session) =>
-            _bot.LockAndDo(() => _bot.RemoveRegistrationMessage(session));
+            _bot.RemoveRegistrationMessage(session);
 
         private Task MarkActionAsOutdated(Message message) =>
             _bot.LockAndDo(() => _bot.EditMessageTextAsync(message.Chat.Id, message.MessageId,

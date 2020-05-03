@@ -42,14 +42,15 @@ environment:
     "BotUserName": "<bot-username, get it also from BotFather>"
   },
   "Game": {
-    "MinGamerCount": 4, // minimal count of gamers for session.
-    "DevelopmentMode": false // development mode, bypass unique gamer validation.
+    "MinGamerCount": 4,
+    "DevelopmentMode": false
   }, 
-  "Serilog": { // logging level, see: google/Serilog
+  "Serilog": { 
         "MinimumLevel": "Information"
    }
 }
 ```
+where: `MinGamerCount` - minimal count of gamers required to start, `DevelopmentMode` - in this mode, bot skip checking like: multiple registration, self voting.
 ## Development
 
 ### Development conventions

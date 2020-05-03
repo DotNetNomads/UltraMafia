@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using Serilog;
 using Serilog.Core;
 using Telegram.Bot;
@@ -18,8 +19,9 @@ namespace UltraMafia.Frontend.Telegram
 {
     public static class TelegramFrontendExtensions
     {
-        private static readonly List<(int sessionId, int messageId)> RegistrationMessageRegistry =
-            new List<(int sessionId, int messageId)>();
+        private static readonly Dictionary<int, (int messageId, CancellationTokenSource repeatCancelerationToken)>
+            RegistrationMessageRegistry =
+                new Dictionary<int, (int messageId, CancellationTokenSource repeatCancellationToken)>();
 
         private static readonly Dictionary<int, (string actionName, int gamerId)> ActionsRegistry =
             new Dictionary<int, (string actionName, int gamerId)>();
@@ -31,6 +33,14 @@ namespace UltraMafia.Frontend.Telegram
             new Dictionary<string, TelegramVote>();
 
         private static readonly SemaphoreSlim BotLock = new SemaphoreSlim(1);
+        private static User? s_botUser;
+
+        private static readonly Dictionary<long, (DateTime checkedAt, bool isAllowed)> PinAllowedRegistry =
+            new Dictionary<long, (DateTime checkedAt, bool allowed)>();
+
+        private static readonly Dictionary<int, GameSession> SessionCache = new Dictionary<int, GameSession>();
+
+        #region DbContext
 
         public static async Task<GamerAccount> ResolveOrCreateGamerAccountFromTelegramMessage(
             this GameDbContext context, Message message)
@@ -62,6 +72,7 @@ namespace UltraMafia.Frontend.Telegram
 
                 return gamerAccount;
             }
+
             gamerAccount = new GamerAccount
             {
                 IdExternal = userId.ToString(),
@@ -93,12 +104,22 @@ namespace UltraMafia.Frontend.Telegram
             return room;
         }
 
+        #endregion
+
+        #region Telegram Bot
+
         public static async Task RemoveRegistrationMessage(this ITelegramBotClient bot, GameSession session)
         {
-            var messageInfo = RegistrationMessageRegistry.First(m =>
-                m.sessionId == session.Id);
-            await bot.DeleteMessageAsync(session.Room.ExternalRoomId, messageInfo.messageId);
-            RegistrationMessageRegistry.Remove(messageInfo);
+            await bot.LockAndDo(async () =>
+            {
+                if (!RegistrationMessageRegistry.TryGetValue(session.Id, out var messageInfo))
+                    return;
+                // remove session from cache
+                SessionCache.Remove(session.Id);
+                messageInfo.repeatCancelerationToken.Cancel(false);
+                await bot.DeleteMessageAsync(session.Room.ExternalRoomId, messageInfo.messageId);
+                RegistrationMessageRegistry.Remove(session.Id);
+            });
         }
 
         public static void EnsurePublicChat(this Message message)
@@ -108,8 +129,91 @@ namespace UltraMafia.Frontend.Telegram
             throw new InvalidOperationException("Это действие разрешено вызывать только из публичных чатов");
         }
 
-        public static async Task CreateOrUpdateRegistrationMessage(this ITelegramBotClient bot, GameSession session,
+        public static async Task CreateRegistrationMessage(this ITelegramBotClient bot, GameSession newSession,
             TelegramFrontendSettings settings)
+        {
+            var repeatCancellationTokenSource = new CancellationTokenSource();
+            SessionCache.Add(newSession.Id, newSession);
+            while (true)
+            {
+                // check, that repeating is disabled!
+                if (repeatCancellationTokenSource.IsCancellationRequested)
+                    break;
+                try
+                {
+                    // deleting old message if exist
+                    await bot.LockAndDo(async () =>
+                    {
+                        if (RegistrationMessageRegistry.TryGetValue(newSession.Id, out var lastMessageInfo))
+                        {
+                            await bot.DeleteMessageAsync(new ChatId(newSession.Room.ExternalRoomId),
+                                lastMessageInfo.messageId,
+                                lastMessageInfo.repeatCancelerationToken.Token);
+                            RegistrationMessageRegistry.Remove(newSession.Id);
+                        }
+                    });
+
+                    var text = GenerateRegistrationMessage(SessionCache[newSession.Id], settings, out var buttons);
+
+                    Message? message = null;
+                    await bot.LockAndDo(async () =>
+                    {
+                        message = await bot.SendTextMessageAsync(newSession.Room.ExternalRoomId, text,
+                            ParseMode.Html,
+                            false,
+                            false, 0,
+                            new InlineKeyboardMarkup(buttons), repeatCancellationTokenSource.Token);
+                        await Task.Delay(100, repeatCancellationTokenSource.Token);
+                        await bot.PinMessageIfAllowed(message, repeatCancellationTokenSource.Token);
+                        RegistrationMessageRegistry.Add(newSession.Id,
+                            (message.MessageId, repeatCancellationTokenSource));
+                    });
+                    if (message == null)
+                    {
+                        Log.Error(
+                            $"Error occured when bot tried send registration message to room: {newSession.Room.Id}");
+                        break;
+                    }
+
+                    await Task.Delay(30000, repeatCancellationTokenSource.Token);
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Error occured when bot tried send registration message");
+                }
+            }
+        }
+
+        public static async Task UpdateRegistrationMessage(this ITelegramBotClient bot, GameSession session,
+            TelegramFrontendSettings settings)
+        {
+            if (!RegistrationMessageRegistry.TryGetValue(session.Id, out var currentMessageInfo))
+            {
+                await CreateRegistrationMessage(bot, session, settings);
+                return;
+            }
+
+            if (currentMessageInfo.repeatCancelerationToken.IsCancellationRequested)
+                return;
+
+            // update session in cache, for repeatable messages
+            SessionCache[session.Id] = session;
+
+            var text = GenerateRegistrationMessage(session, settings, out var buttons);
+
+            await bot.LockAndDo(() => bot.EditMessageTextAsync(new ChatId(session.Room.ExternalRoomId),
+                currentMessageInfo.messageId,
+                text,
+                ParseMode.Html, false,
+                new InlineKeyboardMarkup(buttons), currentMessageInfo.repeatCancelerationToken.Token));
+        }
+
+        private static string GenerateRegistrationMessage(GameSession session, TelegramFrontendSettings settings,
+            out List<InlineKeyboardButton> buttons)
         {
             var text =
                 $"<b>Создатель игры: <i>{session.CreatedByGamerAccount.NickName}</i></b>\n\n<b>Набор игроков</b> \n\n";
@@ -126,7 +230,7 @@ namespace UltraMafia.Frontend.Telegram
                 index++;
             }
 
-            var buttons = new List<InlineKeyboardButton>()
+            buttons = new List<InlineKeyboardButton>()
             {
                 new InlineKeyboardButton
                 {
@@ -134,27 +238,9 @@ namespace UltraMafia.Frontend.Telegram
                     Url = $"https://t.me/{settings.BotUserName}?start={session.RoomId}"
                 }
             };
-            var currentMessageId = RegistrationMessageRegistry.FirstOrDefault(s =>
-                s.sessionId == session.Id).messageId;
-
-            if (currentMessageId == default)
-            {
-                var message = await bot.SendTextMessageAsync(session.Room.ExternalRoomId, text,
-                    ParseMode.Html,
-                    false,
-                    false, 0,
-                    new InlineKeyboardMarkup(buttons));
-                await bot.PinChatMessageAsync(session.Room.ExternalRoomId, message.MessageId);
-                RegistrationMessageRegistry.Add((session.Id, message.MessageId));
-            }
-            else
-            {
-                await bot.EditMessageTextAsync(new ChatId(session.Room.ExternalRoomId), currentMessageId,
-                    text,
-                    ParseMode.Html, false,
-                    new InlineKeyboardMarkup(buttons));
-            }
+            return text;
         }
+
 
         public static async Task LockAndDo(this ITelegramBotClient bot, Func<Task> action)
         {
@@ -175,15 +261,47 @@ namespace UltraMafia.Frontend.Telegram
             }
         }
 
-        public static void SaveAction(int actionFromId, (string actionName, int gamerId) actionInfo)
+        private static async Task<User> GetBotUser(this ITelegramBotClient bot, CancellationToken token)
         {
-            if (ActionsRegistry.ContainsKey(actionFromId))
-            {
-                throw new Exception("Action already selected!");
-            }
-
-            ActionsRegistry.Add(actionFromId, actionInfo);
+            if (s_botUser != null)
+                return s_botUser;
+            return s_botUser = await bot.GetMeAsync(token);
         }
+
+        private static async Task<bool> CheckPinIsAllowed(this ITelegramBotClient bot, long chatId,
+            CancellationToken token)
+        {
+            // we are caching pin allowance only for one minute.
+            if (PinAllowedRegistry.TryGetValue(chatId, out var info) &&
+                (DateTime.Now - info.checkedAt).TotalSeconds <= 60)
+                return info.isAllowed;
+            // removing outdated information about pin permission
+            if (PinAllowedRegistry.ContainsKey(chatId)) PinAllowedRegistry.Remove(chatId);
+            var botUser = await bot.GetBotUser(token);
+            var chatMember = await bot.GetChatMemberAsync(chatId, botUser.Id, token);
+            var pinAllowed = chatMember.CanPinMessages ?? false;
+            PinAllowedRegistry.Add(chatId, (DateTime.Now, pinAllowed));
+            return pinAllowed;
+        }
+
+        public static async Task PinMessageIfAllowed(this ITelegramBotClient bot, Message message,
+            CancellationToken token)
+        {
+            if (await bot.CheckPinIsAllowed(message.Chat.Id, token))
+            {
+                try
+                {
+                    await bot.PinChatMessageAsync(message.Chat.Id, message.MessageId, false, token);
+                }
+                catch (Exception e)
+                {
+                    Log.Error("Error occured when bot tried to pin message: {0}", e,
+                        JsonConvert.SerializeObject(message));
+                }
+            }
+        }
+
+        #endregion
 
         # region Votes
 
@@ -210,6 +328,16 @@ namespace UltraMafia.Frontend.Telegram
         public static bool IsActionProvided(int gameMemberId) => ActionsRegistry.ContainsKey(gameMemberId);
         public static (string actionName, int gamerId) GetAction(int gameMemberId) => ActionsRegistry[gameMemberId];
         public static void RemoveAction(int gameMemberId) => ActionsRegistry.Remove(gameMemberId);
+
+        public static void SaveAction(int actionFromId, (string actionName, int gamerId) actionInfo)
+        {
+            if (ActionsRegistry.ContainsKey(actionFromId))
+            {
+                throw new Exception("Action already selected!");
+            }
+
+            ActionsRegistry.Add(actionFromId, actionInfo);
+        }
 
         #endregion
     }
