@@ -152,6 +152,7 @@ namespace UltraMafia.Frontend.Telegram
                             RegistrationMessageRegistry.Remove(newSession.Id);
                         }
                     });
+                    await Task.Delay(1000, repeatCancellationTokenSource.Token);
 
                     var text = GenerateRegistrationMessage(SessionCache[newSession.Id], settings, out var buttons);
 
@@ -163,8 +164,6 @@ namespace UltraMafia.Frontend.Telegram
                             false,
                             false, 0,
                             new InlineKeyboardMarkup(buttons), repeatCancellationTokenSource.Token);
-                        await Task.Delay(100, repeatCancellationTokenSource.Token);
-                        await bot.PinMessageIfAllowed(message, repeatCancellationTokenSource.Token);
                         RegistrationMessageRegistry.Add(newSession.Id,
                             (message.MessageId, repeatCancellationTokenSource));
                     });
@@ -175,7 +174,7 @@ namespace UltraMafia.Frontend.Telegram
                         break;
                     }
 
-                    await Task.Delay(30000, repeatCancellationTokenSource.Token);
+                    await Task.Delay(90000, repeatCancellationTokenSource.Token);
                 }
                 catch (TaskCanceledException)
                 {
@@ -183,7 +182,7 @@ namespace UltraMafia.Frontend.Telegram
                 }
                 catch (Exception ex)
                 {
-                    Log.Error("Error occured when bot tried send registration message");
+                    Log.Error("Error occured when bot tried send registration message", ex);
                 }
             }
         }
