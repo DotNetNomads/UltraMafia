@@ -193,12 +193,19 @@ namespace UltraMafia.Frontend.Telegram
 
         private async Task ProcessLeaveCommand(Message message)
         {
-            // 1. should check this message from public chat
-            // 2. resolve room by massage.Chat.Id
-            // 3. resolve gamer by message.From.UserId
-            // 4. Call GameService LeaveGameHandler (room, gamer);
-            // 5. If it returns nothing, it's ok. otherwise return error.
-            // return "Good bye";
+            message.EnsurePublicChat();
+            int roomId;
+            int gamerAccountId;
+            using (var dbContextAccessor = _serviceProvider.GetDbContext())
+            {
+                var room = await dbContextAccessor.DbContext.ResolveOrCreateGameRoomFromTelegramMessage(message);
+                roomId = room.Id;
+                var gamerAccount =
+                    await dbContextAccessor.DbContext.ResolveOrCreateGamerAccountFromTelegramMessage(message);
+                gamerAccountId = gamerAccount.Id;
+            }
+
+            OnGameLeaveRequest(roomId, gamerAccountId);
         }
 
         private async Task ProcessStopCommand(Message message)
@@ -565,6 +572,11 @@ namespace UltraMafia.Frontend.Telegram
             await _bot.UpdateRegistrationMessage(session, _settings);
         }
 
+        public async void OnGamerLeft(GameSession session)
+        {
+            await _bot.UpdateRegistrationMessage(session, _settings);
+        }
+
         public void OnGameStarted(GameSession session) =>
             _bot.RemoveRegistrationMessage(session);
 
@@ -656,7 +668,9 @@ namespace UltraMafia.Frontend.Telegram
         public event Action<(int roomId, int gamerId)> GameJoinRequest;
         public event Action<(int roomId, int gamerId)> GameCreationRequest;
         public event Action<(int roomId, int gamerId)> GameStopRequest;
+        public event Action<(int roomId, int gamerId)> GameLeaveRequest;
         public event Action<int> GameStartRequest;
+        
 
         protected virtual void OnGameJoinRequest(int gameRoomId, int gamerAccountId) =>
             GameJoinRequest?.Invoke((gameRoomId, gamerAccountId));
@@ -669,5 +683,8 @@ namespace UltraMafia.Frontend.Telegram
 
         protected virtual void OnGameStartRequest(int gameRoomId) =>
             GameStartRequest?.Invoke(gameRoomId);
+
+        protected virtual void OnGameLeaveRequest(int gameRoomId, int gamerAccountId) =>
+            GameLeaveRequest?.Invoke((gameRoomId,gamerAccountId));
     }
 }
