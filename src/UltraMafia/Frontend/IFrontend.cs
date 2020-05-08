@@ -57,6 +57,13 @@ namespace UltraMafia.Frontend
         /// </summary>
         /// <remarks>roomId will be passed as an argument</remarks>
         event Action<int> GameStartRequest;
+        
+        /// <summary>
+        /// Event that called when user tries to leave a game session
+        /// </summary>
+        /// <remarks>roomId and gamerId will be passed as an argument</remarks>
+
+        event Action<(int roomId, int gamerId)> GameLeaveRequest;
 
         /// <summary>
         /// Asks doctor for action
@@ -120,6 +127,12 @@ namespace UltraMafia.Frontend
         /// <param name="session">Game session</param>
         /// <param name="account">Gamer account</param>
         void OnGamerJoined(GameSession session, GamerAccount account);
+        
+        /// <summary>
+        /// Process when gamer decided to leave current session
+        /// </summary>
+        /// <param name="session">Game session</param>
+        void OnGamerLeft(GameSession session);
 
         /// <summary>
         /// Process game started state

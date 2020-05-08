@@ -36,6 +36,7 @@ namespace UltraMafia
             _frontend.GameCreationRequest += GameCreationHandler;
             _frontend.GameStartRequest += GameStartHandler;
             _frontend.GameStopRequest += GameStopHandler;
+            _frontend.GameLeaveRequest += GameLeaveHandler;
             _frontend.ActivateFrontend();
         }
 
@@ -46,6 +47,36 @@ namespace UltraMafia
             dbContextAccessor.DbContext.Database.ExecuteSqlRaw(
                 "update `GameSessions` set `State`='ForceFinished' where `State`='Playing'");
             Log.Information("Database is cleaned from old sessions");
+        }
+
+        private async void GameLeaveHandler((int roomId, int gamerId) leaveInfo)
+        {
+            GameSession gameSession;
+            using (var dbContext = _serviceProvider.GetDbContext())
+            {
+                var gamerAccount = await dbContext.DbContext.GamerAccounts.FindAsync(leaveInfo.gamerId);
+                var sessionMember =
+                    await dbContext.DbContext.GameSessionMembers.FirstOrDefaultAsync(sm =>
+                        sm.GamerAccountId == leaveInfo.gamerId &&
+                        sm.GameSession.State == GameSessionStates.Registration &&
+                        sm.GameSession.RoomId == leaveInfo.roomId);
+
+                if (sessionMember == null)
+                {
+                    await _frontend.SendMessageToGamer(gamerAccount, "Ты не можешь выйти из игры в настоящий момент!");
+                    return;
+                }
+
+                dbContext.DbContext.GameSessionMembers.Remove(sessionMember);
+                await dbContext.DbContext.SaveChangesAsync();
+                gameSession = await dbContext.DbContext.GameSessions
+                    .Include(sm => sm.GameMembers)
+                    .ThenInclude(sm => sm.GamerAccount)
+                    .Include(sm => sm.CreatedByGamerAccount)
+                    .Include(sm=>sm.Room)
+                    .FirstAsync(sm=>sm.Id == sessionMember.GameSessionId);
+            }
+            _frontend.OnGamerLeft(gameSession);
         }
 
         private async void GameStopHandler((int roomId, int gamerId) stopInfo)
@@ -64,7 +95,7 @@ namespace UltraMafia
                             !new[] {GameSessionStates.GameOver, GameSessionStates.ForceFinished}.Contains(s.State));
                     if (session == null)
                     {
-                        await _frontend.SendMessageToRoom(room, "Игры нет, сначала создай ее, а потом закрывай)");
+                        await _frontend.SendMessageToRoom(room, "Нету игровой сессий чтобы выходить!");
                         return;
                     }
 
@@ -606,7 +637,7 @@ namespace UltraMafia
                 selectedAction.Target != null
                     ? "Доктор вышел на ночное дежурство!"
                     : "Доктор не хочет выходить на службу :(");
-            
+
             // doctor heals himself, we allow it only one time.
             // we are going to log this action
             if (selectedAction.Target?.Id == doctor.Id)
