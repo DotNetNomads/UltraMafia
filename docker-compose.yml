@@ -7,6 +7,8 @@ services:
        MYSQL_DATABASE: ultra-mafia
     networks:
       - apps
+    ports:
+      - 3399:3306
   mafia-migrator:
     build: ./
     image: dotnet-nomads/ultra-mafia:dev

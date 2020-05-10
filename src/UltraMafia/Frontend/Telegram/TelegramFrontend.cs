@@ -140,6 +140,8 @@ namespace UltraMafia.Frontend.Telegram
             }
 
             var voteInfo = TelegramFrontendExtensions.GetVoteInfo(roomId);
+            if (voteInfo == null)
+                return "Голосование не найдено";
 
             // check allowance
             if (!voteInfo.AllowedToPassVoteUsersIds.ContainsKey(userId))
@@ -244,7 +246,6 @@ namespace UltraMafia.Frontend.Telegram
 
         private async Task ProcessGoCommand(Message message)
         {
-            
             Log.Debug($"Processing go command from {message.From.Id}");
             int roomId;
             using (var dbContextAccessor = _serviceProvider.GetDbContext())
@@ -390,13 +391,20 @@ namespace UltraMafia.Frontend.Telegram
             return lastWords;
         }
 
-        public Task<ActionDescriptor> AskMafiaForAction(GameSessionMember mafia, GameSessionMember[] availableGamers) =>
-            AskForAction(
-                @"Дорогой мафиози. <b>Что будем делать этой ночью?</b> 😈
+        public Task<ActionDescriptor> AskMafiaForAction(GameSessionMember mafia, GameSessionMember[] availableGamers)
+        {
+            var actionTextBuilder = new StringBuilder(@"Дорогой мафиози. <b>Что будем делать этой ночью?</b> 😈
 Доступные действия: 
   🔎 - проверить жителя
   ⚔️ - убить жителя
-",
+");
+            var mafiaGamers = availableGamers.Where(m => m.Role == GameRoles.Mafia && m.Id != mafia.Id)
+                .Select(m => m.GamerAccount.NickName)
+                .ToArray();
+            if (mafiaGamers.Length > 1) actionTextBuilder.AppendLine($"Cоюзники: {string.Join(", ", mafiaGamers)}");
+
+            return AskForAction(
+                actionTextBuilder.ToString(),
                 mafia,
                 availableGamers.Where(gm => gm.Role != GameRoles.Mafia),
                 (member, index) => new (GameActions?, string)[]
@@ -406,6 +414,7 @@ namespace UltraMafia.Frontend.Telegram
                     (Killing, "⚔️")
                 }
             );
+        }
 
         public async Task<VoteDescriptor[]> CreateLynchVoteAndReceiveResults(GameRoom sessionRoom,
             GameSessionMember[] allowedMembers)
@@ -649,7 +658,10 @@ namespace UltraMafia.Frontend.Telegram
                 // check answer
                 if (TelegramFrontendExtensions.IsActionProvided(actionFromMember.Id))
                 {
-                    var (actionName, gamerId) = TelegramFrontendExtensions.GetAction(actionFromMember.Id);
+                    if (!(TelegramFrontendExtensions.GetAction(actionFromMember.Id) is {} actionInfo))
+                        continue;
+
+                    var (actionName, gamerId) = actionInfo;
                     TelegramFrontendExtensions.RemoveAction(actionFromMember.Id);
                     target = availableMembers.FirstOrDefault(g => g.Id == gamerId);
                     action = Enum.Parse<GameActions>(actionName);
@@ -662,7 +674,7 @@ namespace UltraMafia.Frontend.Telegram
 
             // delete action message, because it's outdated.
             if (target == null && message != null) await MarkActionAsOutdated(message);
-            return new ActionDescriptor(action, target);
+            return new ActionDescriptor(action, target, actionFromMember);
         }
 
         public event Action<(int roomId, int gamerId)> GameJoinRequest;
@@ -670,7 +682,7 @@ namespace UltraMafia.Frontend.Telegram
         public event Action<(int roomId, int gamerId)> GameStopRequest;
         public event Action<(int roomId, int gamerId)> GameLeaveRequest;
         public event Action<int> GameStartRequest;
-        
+
 
         protected virtual void OnGameJoinRequest(int gameRoomId, int gamerAccountId) =>
             GameJoinRequest?.Invoke((gameRoomId, gamerAccountId));
@@ -685,6 +697,6 @@ namespace UltraMafia.Frontend.Telegram
             GameStartRequest?.Invoke(gameRoomId);
 
         protected virtual void OnGameLeaveRequest(int gameRoomId, int gamerAccountId) =>
-            GameLeaveRequest?.Invoke((gameRoomId,gamerAccountId));
+            GameLeaveRequest?.Invoke((gameRoomId, gamerAccountId));
     }
 }

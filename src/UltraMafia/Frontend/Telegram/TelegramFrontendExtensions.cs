@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -19,26 +20,24 @@ namespace UltraMafia.Frontend.Telegram
 {
     public static class TelegramFrontendExtensions
     {
-        private static readonly Dictionary<int, (int messageId, CancellationTokenSource repeatCancelerationToken)>
+        private static readonly ConcurrentDictionary<int, RegistrationMessageInfo>
             RegistrationMessageRegistry =
-                new Dictionary<int, (int messageId, CancellationTokenSource repeatCancellationToken)>();
+                new ConcurrentDictionary<int, RegistrationMessageInfo>();
 
-        private static readonly Dictionary<int, (string actionName, int gamerId)> ActionsRegistry =
-            new Dictionary<int, (string actionName, int gamerId)>();
+        private static readonly ConcurrentDictionary<int, (string actionName, int gamerId)> ActionsRegistry =
+            new ConcurrentDictionary<int, (string actionName, int gamerId)>();
 
-        private static readonly Dictionary<string, string?> LastWordsRegistry =
-            new Dictionary<string, string?>();
+        private static readonly ConcurrentDictionary<string, string?> LastWordsRegistry =
+            new ConcurrentDictionary<string, string?>();
 
-        private static readonly Dictionary<string, TelegramVote> VoteRegistry =
-            new Dictionary<string, TelegramVote>();
+        private static readonly ConcurrentDictionary<string, TelegramVote> VoteRegistry =
+            new ConcurrentDictionary<string, TelegramVote>();
 
         private static readonly SemaphoreSlim BotLock = new SemaphoreSlim(1);
         private static User? s_botUser;
 
-        private static readonly Dictionary<long, (DateTime checkedAt, bool isAllowed)> PinAllowedRegistry =
-            new Dictionary<long, (DateTime checkedAt, bool allowed)>();
-
-        private static readonly Dictionary<int, GameSession> SessionCache = new Dictionary<int, GameSession>();
+        private static readonly ConcurrentDictionary<long, (DateTime checkedAt, bool isAllowed)> PinAllowedRegistry =
+            new ConcurrentDictionary<long, (DateTime checkedAt, bool allowed)>();
 
         #region DbContext
 
@@ -110,16 +109,12 @@ namespace UltraMafia.Frontend.Telegram
 
         public static async Task RemoveRegistrationMessage(this ITelegramBotClient bot, GameSession session)
         {
-            await bot.LockAndDo(async () =>
-            {
-                if (!RegistrationMessageRegistry.TryGetValue(session.Id, out var messageInfo))
-                    return;
-                // remove session from cache
-                SessionCache.Remove(session.Id);
-                messageInfo.repeatCancelerationToken.Cancel(false);
-                await bot.DeleteMessageAsync(session.Room.ExternalRoomId, messageInfo.messageId);
-                RegistrationMessageRegistry.Remove(session.Id);
-            });
+            if (!RegistrationMessageRegistry.TryRemove(session.Id, out var messageInfo))
+                return;
+            messageInfo.CancellationTokenSource.Cancel(false);
+            if (messageInfo.CurrentMessageId.HasValue)
+                await bot.LockAndDo(() =>
+                    bot.DeleteMessageAsync(session.Room.ExternalRoomId, messageInfo.CurrentMessageId.Value));
         }
 
         public static void EnsurePublicChat(this Message message)
@@ -132,29 +127,37 @@ namespace UltraMafia.Frontend.Telegram
         public static async Task CreateRegistrationMessage(this ITelegramBotClient bot, GameSession newSession,
             TelegramFrontendSettings settings)
         {
-            var repeatCancellationTokenSource = new CancellationTokenSource();
-            SessionCache.Add(newSession.Id, newSession);
+            var registrationMessageInfo = new RegistrationMessageInfo
+            {
+                CancellationTokenSource = new CancellationTokenSource(),
+                Session = newSession
+            };
+            if (!RegistrationMessageRegistry.TryAdd(newSession.Id, registrationMessageInfo))
+            {
+                Log.Error("Can't add message info to registry. {0}", JsonConvert.SerializeObject(newSession));
+                return;
+            }
+
             while (true)
             {
                 // check, that repeating is disabled!
-                if (repeatCancellationTokenSource.IsCancellationRequested)
+                if (registrationMessageInfo.CancellationTokenSource.IsCancellationRequested)
                     break;
                 try
                 {
                     // deleting old message if exist
-                    await bot.LockAndDo(async () =>
+                    if (registrationMessageInfo.CurrentMessageId.HasValue)
                     {
-                        if (RegistrationMessageRegistry.TryGetValue(newSession.Id, out var lastMessageInfo))
+                        await bot.LockAndDo(async () =>
                         {
                             await bot.DeleteMessageAsync(new ChatId(newSession.Room.ExternalRoomId),
-                                lastMessageInfo.messageId,
-                                lastMessageInfo.repeatCancelerationToken.Token);
-                            RegistrationMessageRegistry.Remove(newSession.Id);
-                        }
-                    });
-                    await Task.Delay(1000, repeatCancellationTokenSource.Token);
+                                registrationMessageInfo.CurrentMessageId.Value,
+                                registrationMessageInfo.CancellationTokenSource.Token);
+                        });
+                        await Task.Delay(1000, registrationMessageInfo.CancellationTokenSource.Token);
+                    }
 
-                    var text = GenerateRegistrationMessage(SessionCache[newSession.Id], settings, out var buttons);
+                    var text = GenerateRegistrationMessage(registrationMessageInfo.Session, settings, out var buttons);
 
                     Message? message = null;
                     await bot.LockAndDo(async () =>
@@ -163,9 +166,7 @@ namespace UltraMafia.Frontend.Telegram
                             ParseMode.Html,
                             false,
                             false, 0,
-                            new InlineKeyboardMarkup(buttons), repeatCancellationTokenSource.Token);
-                        RegistrationMessageRegistry.Add(newSession.Id,
-                            (message.MessageId, repeatCancellationTokenSource));
+                            new InlineKeyboardMarkup(buttons), registrationMessageInfo.CancellationTokenSource.Token);
                     });
                     if (message == null)
                     {
@@ -174,10 +175,12 @@ namespace UltraMafia.Frontend.Telegram
                         break;
                     }
 
-                    await Task.Delay(90000, repeatCancellationTokenSource.Token);
+                    registrationMessageInfo.CurrentMessageId = message.MessageId;
+                    await Task.Delay(90000, registrationMessageInfo.CancellationTokenSource.Token);
                 }
                 catch (TaskCanceledException)
                 {
+                    Log.Logger.Debug("Registration message was canceled.");
                     break;
                 }
                 catch (Exception ex)
@@ -196,19 +199,22 @@ namespace UltraMafia.Frontend.Telegram
                 return;
             }
 
-            if (currentMessageInfo.repeatCancelerationToken.IsCancellationRequested)
+            if (currentMessageInfo.CancellationTokenSource.IsCancellationRequested)
                 return;
 
             // update session in cache, for repeatable messages
-            SessionCache[session.Id] = session;
+            currentMessageInfo.Session = session;
+
+            if (!currentMessageInfo.CurrentMessageId.HasValue)
+                return;
 
             var text = GenerateRegistrationMessage(session, settings, out var buttons);
 
             await bot.LockAndDo(() => bot.EditMessageTextAsync(new ChatId(session.Room.ExternalRoomId),
-                currentMessageInfo.messageId,
+                currentMessageInfo.CurrentMessageId.Value,
                 text,
                 ParseMode.Html, false,
-                new InlineKeyboardMarkup(buttons), currentMessageInfo.repeatCancelerationToken.Token));
+                new InlineKeyboardMarkup(buttons), currentMessageInfo.CancellationTokenSource.Token));
         }
 
         private static string GenerateRegistrationMessage(GameSession session, TelegramFrontendSettings settings,
@@ -275,11 +281,11 @@ namespace UltraMafia.Frontend.Telegram
                 (DateTime.Now - info.checkedAt).TotalSeconds <= 60)
                 return info.isAllowed;
             // removing outdated information about pin permission
-            if (PinAllowedRegistry.ContainsKey(chatId)) PinAllowedRegistry.Remove(chatId);
             var botUser = await bot.GetBotUser(token);
             var chatMember = await bot.GetChatMemberAsync(chatId, botUser.Id, token);
             var pinAllowed = chatMember.CanPinMessages ?? false;
-            PinAllowedRegistry.Add(chatId, (DateTime.Now, pinAllowed));
+            var newValue = (DateTime.Now, pinAllowed);
+            PinAllowedRegistry.AddOrUpdate(chatId, newValue, (key, value) => newValue);
             return pinAllowed;
         }
 
@@ -305,38 +311,48 @@ namespace UltraMafia.Frontend.Telegram
         # region Votes
 
         public static bool IsActiveVote(string roomId) => VoteRegistry.ContainsKey(roomId);
-        public static void DeleteVote(string roomId) => VoteRegistry.Remove(roomId);
-        public static void AddVote(string roomId, TelegramVote vote) => VoteRegistry.Add(roomId, vote);
-        public static TelegramVote GetVoteInfo(string roomId) => VoteRegistry[roomId];
+        public static void DeleteVote(string roomId) => VoteRegistry.TryRemove(roomId, out _);
+
+        public static void AddVote(string roomId, TelegramVote vote) =>
+            VoteRegistry.AddOrUpdate(roomId, vote, (key, _) => vote);
+
+        public static TelegramVote? GetVoteInfo(string roomId) =>
+            VoteRegistry.TryGetValue(roomId, out var voteInfo) ? voteInfo : null;
 
         # endregion
 
         #region LastWords
 
         public static bool IsLastWordsActual(string chatId) => LastWordsRegistry.ContainsKey(chatId);
-        public static void SaveLastWords(string chatId, string lastWords) => LastWordsRegistry[chatId] = lastWords;
-        public static void AllowLastWords(string chatId) => LastWordsRegistry.Add(chatId, null);
-        public static bool IsLastWordsWritten(string chatId) => LastWordsRegistry[chatId] != null;
-        public static string GetLastWords(string chatId) => LastWordsRegistry[chatId];
-        public static void DisallowLastWords(string chatId) => LastWordsRegistry.Remove(chatId);
+
+        public static void SaveLastWords(string chatId, string lastWords) =>
+            LastWordsRegistry.AddOrUpdate(chatId, lastWords, (key, _) => lastWords);
+
+        public static void AllowLastWords(string chatId) => LastWordsRegistry.TryAdd(chatId, null);
+
+        public static bool IsLastWordsWritten(string chatId) =>
+            LastWordsRegistry.TryGetValue(chatId, out var lastWords) && lastWords != null;
+
+        public static string? GetLastWords(string chatId) =>
+            LastWordsRegistry.TryGetValue(chatId, out var lastWords) ? lastWords : null;
+
+        public static void DisallowLastWords(string chatId) => LastWordsRegistry.TryRemove(chatId, out _);
 
         #endregion
 
         # region Actions
 
         public static bool IsActionProvided(int gameMemberId) => ActionsRegistry.ContainsKey(gameMemberId);
-        public static (string actionName, int gamerId) GetAction(int gameMemberId) => ActionsRegistry[gameMemberId];
-        public static void RemoveAction(int gameMemberId) => ActionsRegistry.Remove(gameMemberId);
 
-        public static void SaveAction(int actionFromId, (string actionName, int gamerId) actionInfo)
-        {
-            if (ActionsRegistry.ContainsKey(actionFromId))
-            {
-                throw new Exception("Action already selected!");
-            }
+        public static (string actionName, int gamerId)? GetAction(int gameMemberId) =>
+            ActionsRegistry.TryGetValue(gameMemberId, out var action)
+                ? action
+                : ((string actionName, int gamerId)?) null;
 
-            ActionsRegistry.Add(actionFromId, actionInfo);
-        }
+        public static void RemoveAction(int gameMemberId) => ActionsRegistry.TryRemove(gameMemberId, out _);
+
+        public static void SaveAction(int actionFromId, (string actionName, int gamerId) actionInfo) =>
+            ActionsRegistry.AddOrUpdate(actionFromId, actionInfo, (key, _) => actionInfo);
 
         #endregion
     }

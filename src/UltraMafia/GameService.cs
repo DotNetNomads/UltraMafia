@@ -73,9 +73,10 @@ namespace UltraMafia
                     .Include(sm => sm.GameMembers)
                     .ThenInclude(sm => sm.GamerAccount)
                     .Include(sm => sm.CreatedByGamerAccount)
-                    .Include(sm=>sm.Room)
-                    .FirstAsync(sm=>sm.Id == sessionMember.GameSessionId);
+                    .Include(sm => sm.Room)
+                    .FirstAsync(sm => sm.Id == sessionMember.GameSessionId);
             }
+
             _frontend.OnGamerLeft(gameSession);
         }
 
@@ -381,7 +382,7 @@ namespace UltraMafia
                     await _frontend.SendMessageToRoom(session.Room,
                         $@"
 День #{dayNumber} ☀️
-Все проснулись под птение птичек. 
+Все проснулись под пение птичек. 
 Пришло время наказать мафию.
 
 <b>Игроки</b>: 
@@ -525,19 +526,19 @@ namespace UltraMafia
             return true;
         }
 
-        private async Task InspectGamer(GameSession session, GameRoles instectorRole, GameSessionMember inspectorTarget)
+        private async Task InspectGamer(GameSession session, GameRoles inspectorRole, GameSessionMember inspectorTarget)
         {
             await _frontend.SendMessageToGamer(inspectorTarget.GamerAccount, "Кто-то наводит справки по тебе...");
             var roleName = inspectorTarget.Role switch
             {
-                GameRoles.Citizen => "горожанин",
+                GameRoles.Citizen => "мирный житель",
                 GameRoles.Cop => "коммисар",
                 GameRoles.Doctor => "доктор",
                 GameRoles.Mafia => "мафия"
             };
             var messageText =
                 $"Наши люди нашли важную информацию: <b>{inspectorTarget.GamerAccount.NickName}</b> это <b>{roleName}</b>.";
-            switch (instectorRole)
+            switch (inspectorRole)
             {
                 case GameRoles.Cop:
                 {
@@ -558,7 +559,7 @@ namespace UltraMafia
                     await Task.WhenAll(messageTasks);
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(instectorRole), instectorRole,
+                    throw new ArgumentOutOfRangeException(nameof(inspectorRole), inspectorRole,
                         "Supported only for Cop and Mafia");
             }
         }
@@ -655,6 +656,19 @@ namespace UltraMafia
             var actionTasks = mafia
                 .Select(m => _frontend.AskMafiaForAction(m, availableGamers));
             var allActions = await Task.WhenAll(actionTasks);
+
+            // sending pre-result to mafia
+            if (allActions.Length > 1)
+            {
+                var infoBuilder = new StringBuilder("<b>Выбор мафии</b> \n\n");
+                foreach (var actionDescriptor in allActions)
+                    infoBuilder.AppendLine(
+                        $"<b>{actionDescriptor.ActionFrom.GamerAccount.NickName}</b>: {actionDescriptor.Action switch {null => "💤", GameActions.Checkup => "🔎", GameActions.Killing => "🗡"}} {actionDescriptor.Target?.GamerAccount.NickName ?? ""}\n");
+                var text = infoBuilder.ToString();
+                var preResultMessages = mafia.Select(m => _frontend.SendMessageToGamer(m.GamerAccount, text));
+                await Task.WhenAll(preResultMessages);
+            }
+
             // trying to find top action
             var groupedActions = (from action in allActions
                 group action by new {target = action.Target, action = action.Action}
