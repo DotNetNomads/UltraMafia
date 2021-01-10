@@ -14,14 +14,18 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\UltraMafia.Logic\UltraMafia.Logic.csproj" />
+        <ProjectReference Include="..\UltraMafia.Logic\UltraMafia.Logic.csproj" />
         <ProjectReference Include="..\UltraMafia.DAL\UltraMafia.DAL.csproj" />
     </ItemGroup>
     <ItemGroup>
+        <PackageReference Include="JKang.EventBus" Version="1.1.0" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="5.0.0" />
         <PackageReference Include="Microsoft.Extensions.Configuration" Version="5.0.0" />
         <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="5.0.0" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="5.0.0" />
         <PackageReference Include="Serilog" Version="2.10.1-dev-01265" />
+        <PackageReference Include="Serilog.Enrichers.Thread" Version="3.2.0-dev-00747" />
+        <PackageReference Include="Serilog.Extensions.Logging" Version="3.0.2-dev-10284" />
         <PackageReference Include="Serilog.Settings.Configuration" Version="3.2.0-dev-00264" />
         <PackageReference Include="Serilog.Sinks.Console" Version="4.0.0-dev-00839" />
     </ItemGroup>

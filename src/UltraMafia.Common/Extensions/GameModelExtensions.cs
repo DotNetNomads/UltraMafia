@@ -1,12 +1,11 @@
-#nullable enable
 using System.Linq;
 using System.Text;
 using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Model;
 
-namespace UltraMafia.Logic.Extensions
+namespace UltraMafia.Common.Extensions
 {
-    public static class GameServiceExtensions
+    public static class GameModelExtensions
     {
         public static GameSessionMember? GetDoctor(this GameSession session) => session.GameMembers
             .FirstOrDefault(gm => gm.Role == GameRoles.Doctor && !gm.IsDead);

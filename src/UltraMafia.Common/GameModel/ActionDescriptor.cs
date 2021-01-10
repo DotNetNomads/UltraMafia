@@ -5,16 +5,16 @@ namespace UltraMafia.Common.GameModel
 {
     public struct ActionDescriptor
     {
-        public ActionDescriptor(GameActions? action = null, GameSessionMember target = null,
-            GameSessionMember actionFrom = null)
+        public ActionDescriptor(GameActions? action = null, GameSessionMember? target = null,
+            GameSessionMember? actionFrom = null)
         {
             Action = action;
             Target = target;
             ActionFrom = actionFrom;
         }
 
-        public GameSessionMember ActionFrom { get; set; }
+        public GameSessionMember? ActionFrom { get; set; }
         public GameActions? Action { get; set; }
-        public GameSessionMember Target { get; set; }
+        public GameSessionMember? Target { get; set; }
     }
 }

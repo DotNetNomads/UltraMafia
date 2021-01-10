@@ -15,7 +15,7 @@ services:
     restart: "on-failure"
     networks:
       - apps
-    command: UltraMafia.dll /seed
+    command: UltraMafia.App.dll /seed
     environment: 
       "mafia_Db__Host": "mysql"
       "mafia_Db__User": "root"

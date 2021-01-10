@@ -44,5 +44,9 @@ namespace UltraMafia.DAL
                         .HasConversion(new EnumToStringConverter<GameRoles>());
                 });
         }
+
+        public GameDbContext(DbContextOptions options) : base(options)
+        {
+        }
     }
 }

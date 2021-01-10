@@ -5,8 +5,8 @@ namespace UltraMafia.Frontend.Telegram
 {
     public class RegistrationMessageInfo
     {
-        public CancellationTokenSource CancellationTokenSource { get; set; }
+        public CancellationTokenSource CancellationTokenSource { get; set; } = null!;
         public int? CurrentMessageId { get; set; }
-        public GameSession Session { get; set; }
+        public GameSession Session { get; set; } = null!;
     }
 }

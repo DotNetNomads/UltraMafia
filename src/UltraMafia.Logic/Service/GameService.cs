@@ -13,9 +13,8 @@ using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Extensions;
 using UltraMafia.DAL.Model;
 using UltraMafia.Frontend;
-using UltraMafia.Logic.Extensions;
 
-namespace UltraMafia.Logic
+namespace UltraMafia.Logic.Service
 {
     public class GameService
     {
@@ -41,15 +40,6 @@ namespace UltraMafia.Logic
             _frontend.GameStopRequest += GameStopHandler;
             _frontend.GameLeaveRequest += GameLeaveHandler;
             _frontend.ActivateFrontend();
-        }
-
-        public void CheckDatabase()
-        {
-            using var dbContextAccessor = _serviceProvider.GetDbContext();
-            Log.Information("Cleaning up database...");
-            dbContextAccessor.DbContext.Database.ExecuteSqlRaw(
-                "update `GameSessions` set `State`='ForceFinished' where `State`='Playing'");
-            Log.Information("Database is cleaned from old sessions");
         }
 
         private async void GameLeaveHandler((int roomId, int gamerId) leaveInfo)

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using UltraMafia.Common.Config;
+using UltraMafia.Logic.Service;
 
 namespace UltraMafia.Logic.Extensions
 {
@@ -13,10 +14,9 @@ namespace UltraMafia.Logic.Extensions
             var scope = serviceProvider.CreateScope();
             try
             {
+                var service = scope.ServiceProvider.GetRequiredService<IDatabaseActualizationService>();
+                service.CheckDatabaseAsync();
                 Log.Information("Starting mafia game...");
-                var service = scope.ServiceProvider.GetService<GameService>();
-                service.CheckDatabase();
-                service.ListenToEvents();
             }
             catch (Exception ex)
             {
@@ -30,7 +30,10 @@ namespace UltraMafia.Logic.Extensions
             var gameSettings = new GameSettings();
             config.GetSection("Game").Bind(gameSettings);
             services.AddSingleton(s => gameSettings);
+
             services.AddScoped<GameService>();
+            services.AddScoped<IDatabaseActualizationService, DatabaseActualizationService>();
+
             return services;
         }
     }

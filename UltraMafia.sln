@@ -4,11 +4,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.App", "src\Ultra
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.DAL", "src\UltraMafia.DAL\UltraMafia.DAL.csproj", "{BB875909-72F0-4E28-B7F5-496BF15D3CC0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.Frontend", "UltraMafia.Frontend\UltraMafia.Frontend.csproj", "{F76AD4BA-ACB8-46C6-9E64-533A10376A47}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.Frontend", "src\UltraMafia.Frontend\UltraMafia.Frontend.csproj", "{F76AD4BA-ACB8-46C6-9E64-533A10376A47}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.Logic", "UltraMafia.Logic\UltraMafia.Logic.csproj", "{283F816C-BB38-4271-BA96-E2B12DF683DF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.Logic", "src\UltraMafia.Logic\UltraMafia.Logic.csproj", "{283F816C-BB38-4271-BA96-E2B12DF683DF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.Common", "UltraMafia.Common\UltraMafia.Common.csproj", "{D7BC4082-6B9A-49C7-85B4-7BC7B4A66782}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.Common", "src\UltraMafia.Common\UltraMafia.Common.csproj", "{D7BC4082-6B9A-49C7-85B4-7BC7B4A66782}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

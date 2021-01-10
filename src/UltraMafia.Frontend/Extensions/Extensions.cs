@@ -5,7 +5,7 @@ using UltraMafia.Frontend.Telegram.Config;
 
 namespace UltraMafia.Frontend.Extensions
 {
-    public static class StartupExtensions
+    public static class Extensions
     {
         public static IServiceCollection AddTelegramFrontend(this IServiceCollection services,
             IConfiguration config)

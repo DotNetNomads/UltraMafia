@@ -38,30 +38,30 @@ namespace UltraMafia.Frontend
         /// <summary>
         /// Event that called when user tries join a current game session
         /// </summary>
-        event Action<(int roomId, int gamerId)> GameJoinRequest;
+        event Action<(int roomId, int gamerId)>? GameJoinRequest;
 
         /// <summary>
         /// Event that called when user tries create a game session
         /// </summary>
-        event Action<(int roomId, int gamerId)> GameCreationRequest;
+        event Action<(int roomId, int gamerId)>? GameCreationRequest;
 
         /// <summary>
         /// Event that called when user tries stop the current game
         /// </summary>
-        event Action<(int roomId, int gamerId)> GameStopRequest;
+        event Action<(int roomId, int gamerId)>? GameStopRequest;
 
         /// <summary>
         /// Event that called when user tries to start a game session
         /// </summary>
         /// <remarks>roomId will be passed as an argument</remarks>
-        event Action<int> GameStartRequest;
+        event Action<int>? GameStartRequest;
         
         /// <summary>
         /// Event that called when user tries to leave a game session
         /// </summary>
         /// <remarks>roomId and gamerId will be passed as an argument</remarks>
 
-        event Action<(int roomId, int gamerId)> GameLeaveRequest;
+        event Action<(int roomId, int gamerId)>? GameLeaveRequest;
 
         /// <summary>
         /// Asks doctor for action

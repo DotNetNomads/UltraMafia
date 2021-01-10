@@ -18,8 +18,8 @@ namespace UltraMafia.DAL.Extensions
             var connectionString =
                 $"Server={dbSettings.Host};Port={dbSettings.Port};Database={dbSettings.DbName};Uid={dbSettings.User};Pwd={dbSettings.Password};";
             services.AddDbContext<GameDbContext>(c => c
-                .UseMySql(connectionString, new MySqlServerVersion("8.*.*"),
-                    a => a.MigrationsAssembly("UltraMafia.App.DAL")));
+                .UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
+                    a => a.MigrationsAssembly("UltraMafia.DAL")));
             return services;
         }
 
