@@ -1,8 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia", "src\UltraMafia\UltraMafia.csproj", "{730C4A3A-5CCA-43FF-8B4C-202C15595917}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.App", "src\UltraMafia.App\UltraMafia.App.csproj", "{730C4A3A-5CCA-43FF-8B4C-202C15595917}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.DAL", "src\UltraMafia.DAL\UltraMafia.DAL.csproj", "{BB875909-72F0-4E28-B7F5-496BF15D3CC0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.Frontend", "UltraMafia.Frontend\UltraMafia.Frontend.csproj", "{F76AD4BA-ACB8-46C6-9E64-533A10376A47}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.Logic", "UltraMafia.Logic\UltraMafia.Logic.csproj", "{283F816C-BB38-4271-BA96-E2B12DF683DF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UltraMafia.Common", "UltraMafia.Common\UltraMafia.Common.csproj", "{D7BC4082-6B9A-49C7-85B4-7BC7B4A66782}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,5 +24,17 @@ Global
 		{BB875909-72F0-4E28-B7F5-496BF15D3CC0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BB875909-72F0-4E28-B7F5-496BF15D3CC0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BB875909-72F0-4E28-B7F5-496BF15D3CC0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F76AD4BA-ACB8-46C6-9E64-533A10376A47}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F76AD4BA-ACB8-46C6-9E64-533A10376A47}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F76AD4BA-ACB8-46C6-9E64-533A10376A47}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F76AD4BA-ACB8-46C6-9E64-533A10376A47}.Release|Any CPU.Build.0 = Release|Any CPU
+		{283F816C-BB38-4271-BA96-E2B12DF683DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{283F816C-BB38-4271-BA96-E2B12DF683DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{283F816C-BB38-4271-BA96-E2B12DF683DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{283F816C-BB38-4271-BA96-E2B12DF683DF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D7BC4082-6B9A-49C7-85B4-7BC7B4A66782}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D7BC4082-6B9A-49C7-85B4-7BC7B4A66782}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D7BC4082-6B9A-49C7-85B4-7BC7B4A66782}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D7BC4082-6B9A-49C7-85B4-7BC7B4A66782}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

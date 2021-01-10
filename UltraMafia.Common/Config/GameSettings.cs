@@ -1,4 +1,4 @@
-namespace UltraMafia.Helpers
+namespace UltraMafia.Common.Config
 {
     public sealed class GameSettings
     {

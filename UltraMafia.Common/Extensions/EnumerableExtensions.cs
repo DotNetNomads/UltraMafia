@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace UltraMafia
+namespace UltraMafia.Common.Extensions
 {
     public static class EnumerableExtensions
     {

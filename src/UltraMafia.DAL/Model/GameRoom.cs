@@ -1,5 +1,3 @@
-using UlstraMafia.DAL;
-
 namespace UltraMafia.DAL.Model
 {
     public class GameRoom : BaseEntity

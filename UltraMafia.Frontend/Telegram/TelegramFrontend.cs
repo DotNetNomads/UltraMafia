@@ -12,10 +12,12 @@ using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using UltraMafia.Common.Config;
+using UltraMafia.Common.GameModel;
 using UltraMafia.DAL.Enums;
+using UltraMafia.DAL.Extensions;
 using UltraMafia.DAL.Model;
-using UltraMafia.GameModel;
-using UltraMafia.Helpers;
+using UltraMafia.Frontend.Telegram.Config;
 using static UltraMafia.DAL.Enums.GameActions;
 
 namespace UltraMafia.Frontend.Telegram

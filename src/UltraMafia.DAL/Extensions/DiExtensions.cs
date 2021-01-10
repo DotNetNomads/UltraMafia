@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace UltraMafia.Helpers
+namespace UltraMafia.DAL.Extensions
 {
     public static class DiExtensions
     {

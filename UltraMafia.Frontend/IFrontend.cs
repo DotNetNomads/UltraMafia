@@ -1,9 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using UltraMafia.DAL.Enums;
+using UltraMafia.Common.GameModel;
 using UltraMafia.DAL.Model;
-using UltraMafia.GameModel;
 
 namespace UltraMafia.Frontend
 {

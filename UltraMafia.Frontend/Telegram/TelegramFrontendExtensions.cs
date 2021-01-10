@@ -14,7 +14,7 @@ using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using UltraMafia.DAL;
 using UltraMafia.DAL.Model;
-using UltraMafia.Helpers;
+using UltraMafia.Frontend.Telegram.Config;
 
 namespace UltraMafia.Frontend.Telegram
 {
@@ -22,19 +22,19 @@ namespace UltraMafia.Frontend.Telegram
     {
         private static readonly ConcurrentDictionary<int, RegistrationMessageInfo>
             RegistrationMessageRegistry =
-                new ConcurrentDictionary<int, RegistrationMessageInfo>();
+                new();
 
         private static readonly ConcurrentDictionary<int, (string actionName, int gamerId)> ActionsRegistry =
-            new ConcurrentDictionary<int, (string actionName, int gamerId)>();
+            new();
 
         private static readonly ConcurrentDictionary<string, string?> LastWordsRegistry =
-            new ConcurrentDictionary<string, string?>();
+            new();
 
         private static readonly ConcurrentDictionary<string, TelegramVote> VoteRegistry =
-            new ConcurrentDictionary<string, TelegramVote>();
+            new();
 
         private static readonly SemaphoreSlim BotLock = new SemaphoreSlim(1);
-        private static User? s_botUser;
+        private static User _sBotUser;
 
         private static readonly ConcurrentDictionary<long, (DateTime checkedAt, bool isAllowed)> PinAllowedRegistry =
             new ConcurrentDictionary<long, (DateTime checkedAt, bool allowed)>();
@@ -268,9 +268,9 @@ namespace UltraMafia.Frontend.Telegram
 
         private static async Task<User> GetBotUser(this ITelegramBotClient bot, CancellationToken token)
         {
-            if (s_botUser != null)
-                return s_botUser;
-            return s_botUser = await bot.GetMeAsync(token);
+            if (_sBotUser != null)
+                return _sBotUser;
+            return _sBotUser = await bot.GetMeAsync(token);
         }
 
         private static async Task<bool> CheckPinIsAllowed(this ITelegramBotClient bot, long chatId,

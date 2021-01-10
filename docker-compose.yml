@@ -32,8 +32,8 @@ services:
       "mafia_Db__User": "root"
       "mafia_Db__Password": "root"
       "mafia_Db__DbName": "ultra-mafia"
-      "mafia_Frontend__Token": "place-your-token"
-      "mafia_Frontend__BotUserName": "place-your-bot-username"
+      "mafia_Frontend__Token": "903240439:AAF2k08TTgTrn-BvttvdlirlcJAclPNhUgQ"
+      "mafia_Frontend__BotUserName": "geteromafiadevbot"
       "mafia_Game__DevelopmentMode": "true"
 networks:
   apps:

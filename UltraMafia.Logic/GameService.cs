@@ -6,13 +6,16 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using UltraMafia.Common.Config;
+using UltraMafia.Common.Extensions;
+using UltraMafia.Common.GameModel;
 using UltraMafia.DAL.Enums;
+using UltraMafia.DAL.Extensions;
 using UltraMafia.DAL.Model;
 using UltraMafia.Frontend;
-using UltraMafia.GameModel;
-using UltraMafia.Helpers;
+using UltraMafia.Logic.Extensions;
 
-namespace UltraMafia
+namespace UltraMafia.Logic
 {
     public class GameService
     {
@@ -20,7 +23,7 @@ namespace UltraMafia
         private readonly GameSettings _gameSettings;
         private readonly int _minimalGamerCount;
         private readonly IServiceProvider _serviceProvider;
-        private readonly Dictionary<int, List<int>> _healedHimselfRegistry = new Dictionary<int, List<int>>();
+        private readonly Dictionary<int, List<int>> _healedHimselfRegistry = new();
 
         public GameService(IFrontend frontend, GameSettings gameSettings, IServiceProvider serviceProvider)
         {

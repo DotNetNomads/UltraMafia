@@ -1,11 +1,10 @@
-using System;
+#nullable enable
 using System.Linq;
 using System.Text;
-using Microsoft.Extensions.Primitives;
 using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Model;
 
-namespace UltraMafia
+namespace UltraMafia.Logic.Extensions
 {
     public static class GameServiceExtensions
     {
@@ -27,7 +26,7 @@ namespace UltraMafia
             foreach (var member in session.GameMembers)
             {
                 var infoStringBuilder = new StringBuilder();
-                if (roles || (member.IsDead && showRoleIfDead))
+                if (roles || member.IsDead && showRoleIfDead)
                     infoStringBuilder.Append($":  <i>{member.Role.GetRoleName()}</i>");
                 if (member.IsDead) infoStringBuilder.Append("  ☠️");
                 if (member.IsWin) infoStringBuilder.Append("  🏆");

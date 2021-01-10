@@ -1,4 +1,4 @@
-namespace UlstraMafia.DAL
+namespace UltraMafia.DAL
 {
     public abstract class BaseEntity
     {

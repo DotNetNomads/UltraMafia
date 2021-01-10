@@ -1,6 +1,6 @@
 using UltraMafia.DAL.Model;
 
-namespace UltraMafia.GameModel
+namespace UltraMafia.Common.GameModel
 {
     public struct VoteDescriptor
     {

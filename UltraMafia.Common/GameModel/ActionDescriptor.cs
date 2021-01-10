@@ -1,8 +1,7 @@
-using System.Collections;
 using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Model;
 
-namespace UltraMafia.GameModel
+namespace UltraMafia.Common.GameModel
 {
     public struct ActionDescriptor
     {
@@ -14,8 +13,8 @@ namespace UltraMafia.GameModel
             ActionFrom = actionFrom;
         }
 
-        public GameSessionMember? ActionFrom { get; set; }
+        public GameSessionMember ActionFrom { get; set; }
         public GameActions? Action { get; set; }
-        public GameSessionMember? Target { get; set; }
+        public GameSessionMember Target { get; set; }
     }
 }

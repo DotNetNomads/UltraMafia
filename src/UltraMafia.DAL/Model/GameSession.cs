@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UlstraMafia.DAL;
 using UltraMafia.DAL.Enums;
 
 namespace UltraMafia.DAL.Model
@@ -12,7 +11,7 @@ namespace UltraMafia.DAL.Model
         public DateTime StartedOn { get; set; }
         public DateTime FinishedOn { get; set; }
         public GameSessionStates State { get; set; }
-        public List<GameSessionMember> GameMembers { get; set; } = new List<GameSessionMember>();
+        public List<GameSessionMember> GameMembers { get; set; } = new();
         public int CreatedByGamerAccountId { get; set; }
         public GamerAccount CreatedByGamerAccount { get; set; }
     }

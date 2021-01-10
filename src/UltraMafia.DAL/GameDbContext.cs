@@ -7,10 +7,10 @@ namespace UltraMafia.DAL
 {
     public class GameDbContext : DbContext
     {
-        public DbSet<GameRoom> GameRooms { get; set; }
-        public DbSet<GameSession> GameSessions { get; set; }
-        public DbSet<GameSessionMember> GameSessionMembers { get; set; }
-        public DbSet<GamerAccount> GamerAccounts { get; set; }
+        public DbSet<GameRoom> GameRooms { get; set; } = null!;
+        public DbSet<GameSession> GameSessions { get; set; } = null!;
+        public DbSet<GameSessionMember> GameSessionMembers { get; set; } = null!;
+        public DbSet<GamerAccount> GamerAccounts { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -43,10 +43,6 @@ namespace UltraMafia.DAL
                     sessionMember.Property(p => p.Role)
                         .HasConversion(new EnumToStringConverter<GameRoles>());
                 });
-        }
-
-        public GameDbContext(DbContextOptions options) : base(options)
-        {
         }
     }
 }

@@ -1,9 +1,7 @@
 using System;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using UltraMafia.DAL;
 
-namespace UltraMafia.Helpers
+namespace UltraMafia.DAL.Extensions
 {
     public class DbContextAccessor : IDisposable
     {
