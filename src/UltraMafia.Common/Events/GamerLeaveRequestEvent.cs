@@ -1,14 +1,24 @@
 namespace UltraMafia.Common.Events
 {
-    public struct GamerLeaveRequestEvent
+    /// <summary>
+    /// Occurs when gamer requests for leaving from game
+    /// </summary>
+    public class GamerLeaveRequestEvent
     {
         public GamerLeaveRequestEvent(int roomId, int gamerId)
         {
             RoomId = roomId;
-            GamerId = gamerId;
+            GamerAccountId = gamerId;
         }
 
+        /// <summary>
+        /// Gamer's room identifier
+        /// </summary>
         public int RoomId { get; }
-        public int GamerId { get; }
+
+        /// <summary>
+        /// Gamer's identifier
+        /// </summary>
+        public int GamerAccountId { get; }
     }
 }

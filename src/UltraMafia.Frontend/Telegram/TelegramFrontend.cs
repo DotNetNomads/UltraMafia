@@ -295,55 +295,16 @@ namespace UltraMafia.Frontend.Telegram
 
         #endregion
 
-        public void ActivateFrontend()
-        {
-            _startTime = DateTime.UtcNow;
-            _bot.StartReceiving(new[]
-            {
-                UpdateType.CallbackQuery, UpdateType.Message
-            });
-
-            _bot.OnUpdate += BotOnOnUpdate;
-        }
-
-        public Task MuteAll(GameRoom room, DateTime until)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task UnmuteAll(GameRoom room)
-        {
-            throw new NotImplementedException();
-        }
-
-        public async Task SendMessageToGamer(GamerAccount gamer, string message)
-        {
-            if (gamer.PersonalRoomId == null || gamer.PersonalRoomId == "0")
-                return;
-
-            await _bot.LockAndDo(() => _bot.SendTextMessageAsync(gamer.PersonalRoomId, message, ParseMode.Html));
-        }
-
-        public Task SendMessageToRoom(GameRoom room, string message, bool important = false) =>
-            _bot.LockAndDo(async () =>
-            {
-                var messageObj = await _bot.SendTextMessageAsync(room.ExternalRoomId, message, ParseMode.Html);
-                if (important)
-                {
-                    await Task.Delay(100);
-                    await _bot.PinMessageIfAllowed(messageObj, CancellationToken.None);
-                }
-            });
-
-        public Task MuteSpecificGamers(GameRoom room, GamerAccount[] gamers)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task UnmuteSpecificGamers(GameRoom room, GamerAccount[] gamers)
-        {
-            throw new NotImplementedException();
-        }
+        // public void ActivateFrontend()
+        // {
+        //     _startTime = DateTime.UtcNow;
+        //     _bot.StartReceiving(new[]
+        //     {
+        //         UpdateType.CallbackQuery, UpdateType.Message
+        //     });
+        //
+        //     _bot.OnUpdate += BotOnOnUpdate;
+        // }
 
         public Task<ActionDescriptor> AskDoctorForAction(GameSessionMember doctor,
             GameSessionMember[] membersToSelect) => AskForAction(
@@ -678,27 +639,5 @@ namespace UltraMafia.Frontend.Telegram
             if (target == null && message != null) await MarkActionAsOutdated(message);
             return new ActionDescriptor(action, target, actionFromMember);
         }
-
-        public event Action<(int roomId, int gamerId)> GameJoinRequest;
-        public event Action<(int roomId, int gamerId)> GameCreationRequest;
-        public event Action<(int roomId, int gamerId)> GameStopRequest;
-        public event Action<(int roomId, int gamerId)> GameLeaveRequest;
-        public event Action<int> GameStartRequest;
-
-
-        protected virtual void OnGameJoinRequest(int gameRoomId, int gamerAccountId) =>
-            GameJoinRequest?.Invoke((gameRoomId, gamerAccountId));
-
-        protected virtual void OnGameCreationRequest(int gameRoomId, int gamerAccountId) =>
-            GameCreationRequest?.Invoke((gameRoomId, gamerAccountId));
-
-        protected virtual void OnGameStopRequest(int gameRoomId, int gamerAccountId) =>
-            GameStopRequest?.Invoke((gameRoomId, gamerAccountId));
-
-        protected virtual void OnGameStartRequest(int gameRoomId) =>
-            GameStartRequest?.Invoke(gameRoomId);
-
-        protected virtual void OnGameLeaveRequest(int gameRoomId, int gamerAccountId) =>
-            GameLeaveRequest?.Invoke((gameRoomId, gamerAccountId));
     }
 }

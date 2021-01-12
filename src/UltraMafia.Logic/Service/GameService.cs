@@ -9,37 +9,42 @@ using Serilog;
 using UltraMafia.Common.Config;
 using UltraMafia.Common.Extensions;
 using UltraMafia.Common.GameModel;
+using UltraMafia.Common.Service.Frontend;
 using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Extensions;
 using UltraMafia.DAL.Model;
-using UltraMafia.Frontend;
 
 namespace UltraMafia.Logic.Service
 {
     public class GameService
     {
-        private readonly IFrontend _frontend;
+        private readonly IDialogService _dialogService;
+        private readonly IMessageSenderService _messageSenderService;
+        private readonly IVoteService _voteService;
         private readonly GameSettings _gameSettings;
         private readonly int _minimalGamerCount;
         private readonly IServiceProvider _serviceProvider;
         private readonly Dictionary<int, List<int>> _healedHimselfRegistry = new();
 
-        public GameService(IFrontend frontend, GameSettings gameSettings, IServiceProvider serviceProvider)
+        public GameService(GameSettings gameSettings, IServiceProvider serviceProvider,
+            IDialogService dialogService, IMessageSenderService messageSenderService, IVoteService voteService)
         {
-            _frontend = frontend;
             _gameSettings = gameSettings;
             _serviceProvider = serviceProvider;
+            _dialogService = dialogService;
+            _messageSenderService = messageSenderService;
+            _voteService = voteService;
             _minimalGamerCount = _gameSettings.MinGamerCount < 4 ? 4 : _gameSettings.MinGamerCount;
         }
 
         public void ListenToEvents()
         {
-            _frontend.GameJoinRequest += GameJoinHandler;
-            _frontend.GameCreationRequest += GameCreationHandler;
-            _frontend.GameStartRequest += GameStartHandler;
-            _frontend.GameStopRequest += GameStopHandler;
-            _frontend.GameLeaveRequest += GameLeaveHandler;
-            _frontend.ActivateFrontend();
+            // _frontend.GameJoinRequest += GameJoinHandler;
+            // _frontend.GameCreationRequest += GameCreationHandler;
+            // _frontend.GameStartRequest += GameStartHandler;
+            // _frontend.GameStopRequest += GameStopHandler;
+            // _frontend.GameLeaveRequest += GameLeaveHandler;
+            // _frontend.ActivateFrontend();
         }
 
         private async void GameLeaveHandler((int roomId, int gamerId) leaveInfo)

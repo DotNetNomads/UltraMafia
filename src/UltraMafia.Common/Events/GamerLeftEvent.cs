@@ -2,13 +2,16 @@ using UltraMafia.DAL.Model;
 
 namespace UltraMafia.Common.Events
 {
-    public struct GamerLeftEvent
+    /// <summary>
+    /// Occurs when gamer left from game
+    /// </summary>
+    public class GamerLeftEvent
     {
-        public GamerLeftEvent(GameSession session)
-        {
-            Session = session;
-        }
+        public GamerLeftEvent(GameSession session) => Session = session;
 
+        /// <summary>
+        /// Game session where leave occured
+        /// </summary>
         public GameSession Session { get; }
     }
 }
