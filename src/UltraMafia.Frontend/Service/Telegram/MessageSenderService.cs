@@ -8,14 +8,11 @@ using UltraMafia.Frontend.Telegram;
 
 namespace UltraMafia.Frontend.Service.Telegram
 {
-    public class MessageSendingService : IMessageSenderService
+    public class MessageSenderService : IMessageSenderService
     {
         private readonly ITelegramBotClient _bot;
 
-        public MessageSendingService(ITelegramBotClient bot)
-        {
-            _bot = bot;
-        }
+        public MessageSenderService(ITelegramBotClient bot) => _bot = bot;
 
         public async Task SendMessageToGamer(GamerAccount gamer, string message)
         {
