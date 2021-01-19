@@ -117,13 +117,6 @@ namespace UltraMafia.Frontend.Telegram
                     bot.DeleteMessageAsync(session.Room.ExternalRoomId, messageInfo.CurrentMessageId.Value));
         }
 
-        public static void EnsurePublicChat(this Message message)
-        {
-            if (message.Chat.Type != ChatType.Private && message.Chat.Type != ChatType.Channel)
-                return;
-            throw new InvalidOperationException("Это действие разрешено вызывать только из публичных чатов");
-        }
-
         public static async Task CreateRegistrationMessage(this ITelegramBotClient bot, GameSession newSession,
             TelegramFrontendSettings settings)
         {

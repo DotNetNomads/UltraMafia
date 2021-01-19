@@ -3,22 +3,30 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using JKang.EventBus;
 using Telegram.Bot;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using UltraMafia.Common.Config;
 using UltraMafia.Common.GameModel;
 using UltraMafia.Common.Service.Frontend;
 using UltraMafia.DAL.Model;
+using UltraMafia.Frontend.Events;
 using UltraMafia.Frontend.Telegram;
 using static System.Array;
 
 namespace UltraMafia.Frontend.Service.Telegram
 {
-    public class VoteService : IVoteService
+    public class VoteService : IVoteService, IEventHandler<VoteAnswerReceivedEvent>
     {
         private readonly ITelegramBotClient _bot;
+        private readonly GameSettings _gameSettings;
 
-        public VoteService(ITelegramBotClient bot) => _bot = bot;
+        public VoteService(ITelegramBotClient bot, GameSettings gameSettings)
+        {
+            _bot = bot;
+            _gameSettings = gameSettings;
+        }
 
         public async Task<VoteDescriptor[]> CreateLynchVoteAndReceiveResults(GameRoom sessionRoom,
             GameSessionMember[] allowedMembers)
@@ -164,6 +172,36 @@ namespace UltraMafia.Frontend.Service.Telegram
                         new InlineKeyboardMarkup(buttons));
                 }
             });
+        }
+
+        public async Task HandleEventAsync(VoteAnswerReceivedEvent voteEvent)
+        {
+            var answer = await ProcessVoteAnswer(voteEvent.RoomId, voteEvent.UserId, voteEvent.Voice);
+            await _bot.LockAndDo(() => _bot.AnswerCallbackQueryAsync(
+                voteEvent.CallbackQueryId,
+                answer
+            ));
+        }
+
+        private async Task<string> ProcessVoteAnswer(string roomId, string userId, string voice)
+        {
+            if (!TelegramFrontendExtensions.IsActiveVote(roomId))
+                return "Действие не актуально!";
+
+            var voteInfo = TelegramFrontendExtensions.GetVoteInfo(roomId);
+            if (voteInfo == null)
+                return "Голосование не найдено";
+
+            // check allowance
+            if (!voteInfo.AllowedToPassVoteUsersIds.ContainsKey(userId))
+                return "Действие запрещено!";
+            if (!_gameSettings.DevelopmentMode && voteInfo.VoteAllowedPredicate != null &&
+                !voteInfo.VoteAllowedPredicate.Invoke((userId, voice)))
+                return "Голос отклонен";
+
+            voteInfo.AddOrUpdateVote(userId, voice);
+            await UpdateVote(roomId, voteInfo);
+            return "Голос принят";
         }
     }
 }

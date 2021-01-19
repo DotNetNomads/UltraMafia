@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
+using JKang.EventBus;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Telegram.Bot;
@@ -13,30 +13,31 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using UltraMafia.Common.Config;
+using UltraMafia.Common.Events;
 using UltraMafia.Common.GameModel;
 using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Extensions;
 using UltraMafia.DAL.Model;
+using UltraMafia.Frontend.Events;
+using UltraMafia.Frontend.Extensions;
 using UltraMafia.Frontend.Telegram.Config;
 using static UltraMafia.DAL.Enums.GameActions;
 
 namespace UltraMafia.Frontend.Telegram
 {
-    public class TelegramFrontend : IFrontend
+    public class TelegramFrontend
     {
         private DateTime _startTime;
         private readonly TelegramFrontendSettings _settings;
-        private readonly GameSettings _gameSettings;
         private readonly TelegramBotClient _bot;
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IEventPublisher _eventPublisher;
 
 
         public TelegramFrontend(TelegramFrontendSettings settings, IServiceProvider serviceProvider,
-            GameSettings gameSettings)
+            GameSettings gameSettings, IEventPublisher eventPublisher)
         {
             _settings = settings;
-            _serviceProvider = serviceProvider;
-            _gameSettings = gameSettings;
+            _eventPublisher = eventPublisher;
             _bot = new TelegramBotClient(_settings.Token);
         }
 
@@ -64,7 +65,7 @@ namespace UltraMafia.Frontend.Telegram
                 var errorMessage = exception switch
                 {
                     ApiRequestException apiRequestException =>
-                    $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
+                        $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
                     _ => exception.ToString()
                 };
 
@@ -87,17 +88,7 @@ namespace UltraMafia.Frontend.Telegram
 
             if (actionName == "vote")
             {
-                if (requestArgs.Length < 2)
-                    return;
-                callBackQuery.Message.EnsurePublicChat();
-                var roomId = callBackQuery.Message.Chat.Id.ToString();
-                var userId = callBackQuery.From.Id.ToString();
-                var voice = requestArgs[1];
-                var answer = await ProcessVoteAnswer(roomId, userId, voice);
-                await _bot.LockAndDo(() => _bot.AnswerCallbackQueryAsync(
-                    callBackQuery.Id,
-                    answer
-                ));
+                await HandleVoteAnswer(callBackQuery, requestArgs);
                 return;
             }
 
@@ -134,130 +125,58 @@ namespace UltraMafia.Frontend.Telegram
             });
         }
 
-        private async Task<string> ProcessVoteAnswer(string roomId, string userId, string voice)
+        private async Task HandleVoteAnswer(CallbackQuery callBackQuery, string[] requestArgs)
         {
-            if (!TelegramFrontendExtensions.IsActiveVote(roomId))
-            {
-                return "Действие не актуально!";
-            }
-
-            var voteInfo = TelegramFrontendExtensions.GetVoteInfo(roomId);
-            if (voteInfo == null)
-                return "Голосование не найдено";
-
-            // check allowance
-            if (!voteInfo.AllowedToPassVoteUsersIds.ContainsKey(userId))
-                return "Действие запрещено!";
-            if (!_gameSettings.DevelopmentMode && voteInfo.VoteAllowedPredicate != null &&
-                !voteInfo.VoteAllowedPredicate.Invoke((userId, voice)))
-            {
-                return "Голос отклонен";
-            }
-
-            voteInfo.AddOrUpdateVote(userId, voice);
-            await UpdateVote(roomId, voteInfo);
-            return "Голос принят";
+            if (requestArgs.Length < 2)
+                return;
+            callBackQuery.Message.EnsurePublicChat();
+            var roomId = callBackQuery.Message.Chat.Id.ToString();
+            var userId = callBackQuery.From.Id.ToString();
+            var voice = requestArgs[1];
+            await _eventPublisher.PublishEventAsync(new VoteAnswerReceivedEvent(roomId, userId, voice,
+                callBackQuery.Id));
+            return;
         }
 
-        private async Task BotOnMessageReceived(Message message)
+        private Task BotOnMessageReceived(Message message)
         {
             // skip old messages
             if (message.Date < _startTime || message.Type != MessageType.Text)
-                return;
+                return Task.CompletedTask;
 
             // trying to parse bot commands
             var text = message.Text;
 
             bool CommandMatch(string name) => text == $"/{name}" || text == $"/{name}@{_settings.BotUserName}";
-            try
-            {
-                if (text.StartsWith("/start"))
-                    await ProcessJoinCommand(message);
-                else if (CommandMatch("go"))
-                    await ProcessGoCommand(message);
-                else if (CommandMatch("game"))
-                    await ProcessGameCommand(message);
-                else if (CommandMatch("stop"))
-                    await ProcessStopCommand(message);
-                else if (CommandMatch("leave"))
-                    await ProcessLeaveCommand(message);
-                else ProcessMessageDefault(message);
-            }
-            catch (Exception e)
-            {
-                await _bot.SendTextMessageAsync(message.Chat.Id, e.Message, ParseMode.Default, false, false,
-                    message.MessageId);
-                Log.Error(e, "Error occured in message handling");
-            }
+            if (text.StartsWith("/start"))
+                return ProcessJoinCommand(message);
+
+            if (CommandMatch("go"))
+                return ProcessGoCommand(message);
+
+            if (CommandMatch("game"))
+                return ProcessGameCommand(message);
+
+            if (CommandMatch("stop"))
+                return _eventPublisher.PublishEventAsync(new GameStopRequestEvent(message.ResolveGamerInfo()))
+
+            if (CommandMatch("leave"))
+                return _eventPublisher.PublishEventAsync(new GamerLeaveRequestEvent(
+                    message.ResolveRoomInfo(),
+                    message.ResolveGamerInfo()));
+
+            return ProcessMessageDefault(message);
         }
 
         #endregion
 
         #region Actions
 
-        private async Task ProcessLeaveCommand(Message message)
-        {
-            message.EnsurePublicChat();
-            int roomId;
-            int gamerAccountId;
-            using (var dbContextAccessor = _serviceProvider.GetDbContext())
-            {
-                var room = await dbContextAccessor.DbContext.ResolveOrCreateGameRoomFromTelegramMessage(message);
-                roomId = room.Id;
-                var gamerAccount =
-                    await dbContextAccessor.DbContext.ResolveOrCreateGamerAccountFromTelegramMessage(message);
-                gamerAccountId = gamerAccount.Id;
-            }
+        
 
-            OnGameLeaveRequest(roomId, gamerAccountId);
-        }
+        
 
-        private async Task ProcessStopCommand(Message message)
-        {
-            message.EnsurePublicChat();
-            int roomId;
-            int gamerAccountId;
-            using (var dbContextAccessor = _serviceProvider.GetDbContext())
-            {
-                var room = await dbContextAccessor.DbContext.ResolveOrCreateGameRoomFromTelegramMessage(message);
-                roomId = room.Id;
-                var gamerAccount =
-                    await dbContextAccessor.DbContext.ResolveOrCreateGamerAccountFromTelegramMessage(message);
-                gamerAccountId = gamerAccount.Id;
-            }
-
-            OnGameStopRequest(roomId, gamerAccountId);
-        }
-
-        private async Task ProcessGameCommand(Message message)
-        {
-            message.EnsurePublicChat();
-            int roomId;
-            int gamerAccountId;
-            using (var dbContextAccessor = _serviceProvider.GetDbContext())
-            {
-                var room = await dbContextAccessor.DbContext.ResolveOrCreateGameRoomFromTelegramMessage(message);
-                roomId = room.Id;
-                var gamerAccount =
-                    await dbContextAccessor.DbContext.ResolveOrCreateGamerAccountFromTelegramMessage(message);
-                gamerAccountId = gamerAccount.Id;
-            }
-
-            OnGameCreationRequest(roomId, gamerAccountId);
-        }
-
-        private async Task ProcessGoCommand(Message message)
-        {
-            Log.Debug($"Processing go command from {message.From.Id}");
-            int roomId;
-            using (var dbContextAccessor = _serviceProvider.GetDbContext())
-            {
-                var room = await dbContextAccessor.DbContext.ResolveOrCreateGameRoomFromTelegramMessage(message);
-                roomId = room.Id;
-            }
-
-            OnGameStartRequest(roomId);
-        }
+        
 
         private async Task ProcessJoinCommand(Message message)
         {
@@ -270,21 +189,13 @@ namespace UltraMafia.Frontend.Telegram
                     "Невозможно зарегистрировать в игре. Отсутствует номер игровой комнаты. Сначала нажмите на кнопку в общем чате.");
 
             int gamerAccountId;
-            using (var dbContextAccessor = _serviceProvider.GetDbContext())
-            {
-                if (!await dbContextAccessor.DbContext.GameRooms.AnyAsync(r => r.Id == roomId))
-                    throw new Exception("Игры не существует!");
-
-                var gamerAccount =
-                    await dbContextAccessor.DbContext.ResolveOrCreateGamerAccountFromTelegramMessage(message);
-                gamerAccountId = gamerAccount.Id;
-            }
+            
 
 
             OnGameJoinRequest(roomId, gamerAccountId);
         }
 
-        private void ProcessMessageDefault(Message message)
+        private Task ProcessMessageDefault(Message message)
         {
             var chatId = message.Chat.Id.ToString();
             var isPersonal = message.Chat.Type == ChatType.Private;
@@ -468,7 +379,7 @@ namespace UltraMafia.Frontend.Telegram
                 // check answer
                 if (TelegramFrontendExtensions.IsActionProvided(actionFromMember.Id))
                 {
-                    if (!(TelegramFrontendExtensions.GetAction(actionFromMember.Id) is {} actionInfo))
+                    if (!(TelegramFrontendExtensions.GetAction(actionFromMember.Id) is { } actionInfo))
                         continue;
 
                     var (actionName, gamerId) = actionInfo;
