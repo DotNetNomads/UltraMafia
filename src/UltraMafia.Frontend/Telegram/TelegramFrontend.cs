@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using JKang.EventBus;
-using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Telegram.Bot;
 using Telegram.Bot.Args;
@@ -16,7 +15,6 @@ using UltraMafia.Common.Config;
 using UltraMafia.Common.Events;
 using UltraMafia.Common.GameModel;
 using UltraMafia.DAL.Enums;
-using UltraMafia.DAL.Extensions;
 using UltraMafia.DAL.Model;
 using UltraMafia.Frontend.Events;
 using UltraMafia.Frontend.Extensions;
@@ -25,12 +23,37 @@ using static UltraMafia.DAL.Enums.GameActions;
 
 namespace UltraMafia.Frontend.Telegram
 {
+    internal sealed class TelegramMessageProcessor
+    {
+        private record CommandHandler(string Command, bool PublicChat, Func<Message, Task> Handler);
+
+        private readonly List<CommandHandler> _commandHandlers = new();
+        private Func<Message, Task> _defaultHandler;
+
+        public TelegramMessageProcessor(Func<Message, Task> defaultHandler)
+        {
+            _defaultHandler = defaultHandler;
+        }
+
+        public TelegramMessageProcessor Command(string command, bool publicChat, Func<Message, Task> handler)
+        {
+            _commandHandlers.Add(new CommandHandler(command, publicChat, handler));
+            return this;
+        }
+
+        public Task HandleMessage(Message message)
+        {
+            
+        }
+    }
+
     public class TelegramFrontend
     {
         private DateTime _startTime;
         private readonly TelegramFrontendSettings _settings;
         private readonly TelegramBotClient _bot;
         private readonly IEventPublisher _eventPublisher;
+        private readonly TelegramMessageProcessor _messageProcessor = new TelegramMessageProcessor();
 
 
         public TelegramFrontend(TelegramFrontendSettings settings, IServiceProvider serviceProvider,
@@ -158,7 +181,8 @@ namespace UltraMafia.Frontend.Telegram
                 return ProcessGameCommand(message);
 
             if (CommandMatch("stop"))
-                return _eventPublisher.PublishEventAsync(new GameStopRequestEvent(message.ResolveGamerInfo()))
+                return _eventPublisher.PublishEventAsync(new GameStopRequestEvent(message.ResolveGamerInfo(),
+                    message.ResolveRoomInfo()));
 
             if (CommandMatch("leave"))
                 return _eventPublisher.PublishEventAsync(new GamerLeaveRequestEvent(
@@ -172,12 +196,6 @@ namespace UltraMafia.Frontend.Telegram
 
         #region Actions
 
-        
-
-        
-
-        
-
         private async Task ProcessJoinCommand(Message message)
         {
             Log.Debug($"Processing join command from {message.From.Id}");
@@ -189,7 +207,6 @@ namespace UltraMafia.Frontend.Telegram
                     "Невозможно зарегистрировать в игре. Отсутствует номер игровой комнаты. Сначала нажмите на кнопку в общем чате.");
 
             int gamerAccountId;
-            
 
 
             OnGameJoinRequest(roomId, gamerAccountId);

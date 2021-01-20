@@ -22,7 +22,17 @@ namespace UltraMafia.Frontend.Extensions
 
         public static GamerInfo ResolveGamerInfo(this Message message)
         {
-            return new GamerInfo();
+            var user = message.From;
+            var userId = user.Id;
+            var userChatId = message.Chat.Type == ChatType.Private ? message.Chat.Id.ToString() : "0";
+            var nickName = user switch
+            {
+                _ when user.FirstName != null && user.LastName != null => $"{user.FirstName} {user.LastName}",
+                _ when user.FirstName != null => $"{user.FirstName}",
+                _ when user.LastName != null => $"{user.LastName}",
+                _ => $"{user.Username}"
+            };
+            return new GamerInfo(userId, nickName, userChatId);
         }
     }
 }
