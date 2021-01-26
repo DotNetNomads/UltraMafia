@@ -23,45 +23,23 @@ using static UltraMafia.DAL.Enums.GameActions;
 
 namespace UltraMafia.Frontend.Telegram
 {
-    internal sealed class TelegramMessageProcessor
-    {
-        private record CommandHandler(string Command, bool PublicChat, Func<Message, Task> Handler);
-
-        private readonly List<CommandHandler> _commandHandlers = new();
-        private Func<Message, Task> _defaultHandler;
-
-        public TelegramMessageProcessor(Func<Message, Task> defaultHandler)
-        {
-            _defaultHandler = defaultHandler;
-        }
-
-        public TelegramMessageProcessor Command(string command, bool publicChat, Func<Message, Task> handler)
-        {
-            _commandHandlers.Add(new CommandHandler(command, publicChat, handler));
-            return this;
-        }
-
-        public Task HandleMessage(Message message)
-        {
-            
-        }
-    }
-
     public class TelegramFrontend
     {
-        private DateTime _startTime;
-        private readonly TelegramFrontendSettings _settings;
-        private readonly TelegramBotClient _bot;
+        private readonly DateTime _startTime;
+        private readonly ITelegramBotClient _bot;
         private readonly IEventPublisher _eventPublisher;
-        private readonly TelegramMessageProcessor _messageProcessor = new TelegramMessageProcessor();
+        private readonly ITelegramMessageProcessor _messageProcessor;
 
 
         public TelegramFrontend(TelegramFrontendSettings settings, IServiceProvider serviceProvider,
-            GameSettings gameSettings, IEventPublisher eventPublisher)
+            GameSettings gameSettings, IEventPublisher eventPublisher, ITelegramMessageProcessor messageProcessor,
+            ITelegramBotClient bot)
         {
-            _settings = settings;
             _eventPublisher = eventPublisher;
-            _bot = new TelegramBotClient(_settings.Token);
+            _messageProcessor = messageProcessor;
+            _bot = bot;
+            _startTime = DateTime.Now;
+            SetupMessageProcessor();
         }
 
         #region Bot Handlers
@@ -73,14 +51,10 @@ namespace UltraMafia.Frontend.Telegram
             {
                 UpdateType.Message => BotOnMessageReceived(update.Message),
                 UpdateType.CallbackQuery => BotOnCallbackQueryReceived(update.CallbackQuery),
-                _ => null
+                _ => ValueTask.CompletedTask
             };
-
             try
             {
-                if (handler == null)
-                    return;
-
                 await handler;
             }
             catch (Exception exception)
@@ -96,10 +70,10 @@ namespace UltraMafia.Frontend.Telegram
             }
         }
 
-        private async Task BotOnCallbackQueryReceived(CallbackQuery callBackQuery)
+        private async ValueTask BotOnCallbackQueryReceived(CallbackQuery callBackQuery)
         {
             var data = callBackQuery.Data;
-            Log.Debug("User {0} doing action {1}", callBackQuery.From.Id, data);
+            Log.Debug("User {UserId} doing action {Action}", callBackQuery.From.Id, data);
             if (string.IsNullOrWhiteSpace(data))
                 return;
 
@@ -123,12 +97,11 @@ namespace UltraMafia.Frontend.Telegram
             var parsedActionToId = 0;
             if (requestArgs.Length > 2 && !int.TryParse(requestArgs[2], out parsedActionToId))
                 return;
-            var actionToId = parsedActionToId > 0 ? parsedActionToId : (int?) null;
 
             var actionDoneText = "Действие выбрано!";
             try
             {
-                TelegramFrontendExtensions.SaveAction(actionFromId, (actionName, actionToId.Value));
+                TelegramFrontendExtensions.SaveAction(actionFromId, (actionName, parsedActionToId));
             }
             catch (Exception ex)
             {
@@ -148,7 +121,7 @@ namespace UltraMafia.Frontend.Telegram
             });
         }
 
-        private async Task HandleVoteAnswer(CallbackQuery callBackQuery, string[] requestArgs)
+        private async ValueTask HandleVoteAnswer(CallbackQuery callBackQuery, string[] requestArgs)
         {
             if (requestArgs.Length < 2)
                 return;
@@ -161,35 +134,25 @@ namespace UltraMafia.Frontend.Telegram
             return;
         }
 
-        private Task BotOnMessageReceived(Message message)
+        private ValueTask BotOnMessageReceived(Message message)
         {
             // skip old messages
             if (message.Date < _startTime || message.Type != MessageType.Text)
-                return Task.CompletedTask;
+                return ValueTask.CompletedTask;
 
-            // trying to parse bot commands
-            var text = message.Text;
+            // message processing
+            return _messageProcessor.HandleMessageAsync(message);
+        }
 
-            bool CommandMatch(string name) => text == $"/{name}" || text == $"/{name}@{_settings.BotUserName}";
-            if (text.StartsWith("/start"))
-                return ProcessJoinCommand(message);
-
-            if (CommandMatch("go"))
-                return ProcessGoCommand(message);
-
-            if (CommandMatch("game"))
-                return ProcessGameCommand(message);
-
-            if (CommandMatch("stop"))
-                return _eventPublisher.PublishEventAsync(new GameStopRequestEvent(message.ResolveGamerInfo(),
-                    message.ResolveRoomInfo()));
-
-            if (CommandMatch("leave"))
-                return _eventPublisher.PublishEventAsync(new GamerLeaveRequestEvent(
-                    message.ResolveRoomInfo(),
-                    message.ResolveGamerInfo()));
-
-            return ProcessMessageDefault(message);
+        private void SetupMessageProcessor()
+        {
+            _messageProcessor
+                .Command("start", false,
+                    (message, args) =>
+                    {
+                        return _eventPublisher.PublishEventAsync(new GamerJoinRequestEvent());
+                    })
+                .Command()
         }
 
         #endregion

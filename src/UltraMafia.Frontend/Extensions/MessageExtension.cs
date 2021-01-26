@@ -9,16 +9,17 @@ namespace UltraMafia.Frontend.Extensions
     {
         public static void EnsurePublicChat(this Message message)
         {
-            if (message.Chat.Type != ChatType.Private && message.Chat.Type != ChatType.Channel)
+            if (message.IsPublicChat())
                 return;
             throw new InvalidOperationException("Это действие разрешено вызывать только из публичных чатов");
         }
 
-        public static RoomInfo ResolveRoomInfo(this Message message)
-        {
-            message.EnsurePublicChat();
-            return new RoomInfo(message.Chat.Id.ToString(), message.Chat.Title);
-        }
+        public static bool IsPublicChat(this Message message) =>
+            message.Chat.Type == ChatType.Group || message.Chat.Type == ChatType.Supergroup;
+
+        public static RoomInfo? ResolveRoomInfo(this Message message) => message.IsPublicChat()
+            ? null
+            : new RoomInfo(message.Chat.Id.ToString(), message.Chat.Title);
 
         public static GamerInfo ResolveGamerInfo(this Message message)
         {
