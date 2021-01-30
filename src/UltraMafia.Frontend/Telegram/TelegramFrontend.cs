@@ -154,6 +154,7 @@ namespace UltraMafia.Frontend.Telegram
                     })
                 .Command()
         }
+        
 
         #endregion
 

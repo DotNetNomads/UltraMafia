@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Telegram.Bot.Types;
 using UltraMafia.Common.Events;
@@ -14,7 +15,7 @@ namespace UltraMafia.Frontend.Telegram
         Func<Message, ValueTask>? DefaultHandler { set; }
 
         TelegramMessageProcessor Command(string command, bool publicChat,
-            Func<Message, string[]?, ValueTask> handler);
+            Func<string[], Chat, User, ValueTask> handler);
 
         ValueTask HandleMessageAsync(Message message);
     }
@@ -22,7 +23,7 @@ namespace UltraMafia.Frontend.Telegram
     public class TelegramMessageProcessor : ITelegramMessageProcessor
     {
         private record CommandHandler(string Command, bool PublicChat,
-            Func<Message, string[]?, ValueTask> Handler);
+            Func<string[], Chat, User, ValueTask> Handler);
 
         private readonly List<CommandHandler> _commandHandlers = new();
         public Func<Message, ValueTask>? DefaultHandler { private get; set; }
@@ -31,7 +32,7 @@ namespace UltraMafia.Frontend.Telegram
         public TelegramMessageProcessor(TelegramFrontendSettings settings) => _settings = settings;
 
         public TelegramMessageProcessor Command(string command, bool publicChat,
-            Func<Message, string[]?, ValueTask> handler)
+            Func<string[], Chat, User, ValueTask> handler)
         {
             _commandHandlers.Add(new CommandHandler(command, publicChat, handler));
             return this;
@@ -42,18 +43,14 @@ namespace UltraMafia.Frontend.Telegram
 
         public ValueTask HandleMessageAsync(Message message)
         {
-            var publicChat = message.IsPublicChat();
+            if (!message.TryParseCommand(out var commandName, out var arguments))
+                return DefaultHandler?.Invoke(message) ??
+                       throw new InvalidOperationException("Please provide default handler for messages");
+
+            var isPublicChat = message.IsPublicChat();
             var handler = _commandHandlers.FirstOrDefault(ch =>
-                ch.PublicChat == publicChat && CommandMatch(ch.Command, message.Text));
-
-            if (handler != null)
-                return handler.Handler.Invoke(message,
-                    null);
-
-            if (DefaultHandler == null)
-                throw new InvalidOperationException("Please provide default handler for messages");
-
-            return DefaultHandler.Invoke(message);
+                ch.PublicChat == isPublicChat && ch.Command == commandName);
+            return handler?.Handler.Invoke(arguments, message.Chat, message.From) ?? ValueTask.CompletedTask;
         }
     }
 }

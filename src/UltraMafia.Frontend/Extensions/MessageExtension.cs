@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Text.RegularExpressions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using UltraMafia.Common.Events;
@@ -34,6 +36,23 @@ namespace UltraMafia.Frontend.Extensions
                 _ => $"{user.Username}"
             };
             return new GamerInfo(userId, nickName, userChatId);
+        }
+
+        public static bool TryParseCommand(this Message message, out string commandName, out string[] arguments)
+        {
+            string[] splitMessage;
+            var text = message.Text;
+            if (text.StartsWith("/") && Regex.IsMatch((splitMessage = text.Split(" "))[0],
+                "^[a-zA-Z0-9]*$"))
+            {
+                commandName = splitMessage[0].Remove(1);
+                arguments = splitMessage.Skip(1).ToArray();
+                return true;
+            }
+
+            commandName = string.Empty;
+            arguments = Array.Empty<string>();
+            return false;
         }
     }
 }
