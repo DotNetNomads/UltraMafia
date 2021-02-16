@@ -16,6 +16,7 @@ using UltraMafia.Common.GameModel;
 using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Model;
 using UltraMafia.Frontend.Events;
+using UltraMafia.Frontend.Exceptions;
 using UltraMafia.Frontend.Extensions;
 using static UltraMafia.DAL.Enums.GameActions;
 
@@ -57,12 +58,26 @@ namespace UltraMafia.Frontend.Telegram
             }
             catch (Exception exception)
             {
-                var errorMessage = exception switch
+                string errorMessage;
+                switch (exception)
                 {
-                    ApiRequestException apiRequestException =>
-                        $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
-                    _ => exception.ToString()
-                };
+                    case ApiRequestException apiRequestException:
+                        errorMessage =
+                            $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}";
+                        break;
+                    case GameException gameException:
+                        var roomId = update.Type switch
+                        {
+                            UpdateType.Message => update.Message.Chat.Id,
+                            UpdateType.CallbackQuery => expr,
+                            _ => null
+                        }
+                        _bot.LockAndDo(() => _bot.SendTextMessageAsync())
+                        break;
+                    default:
+                        errorMessage = exception.ToString();
+                        break;
+                }
 
                 _logger.LogError(exception, "{ErrorMessage}", errorMessage);
             }

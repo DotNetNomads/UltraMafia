@@ -34,7 +34,7 @@ namespace UltraMafia.Frontend.Telegram
         private static readonly ConcurrentDictionary<string, TelegramVote> VoteRegistry =
             new();
 
-        private static readonly SemaphoreSlim BotLock = new SemaphoreSlim(1);
+        
         private static User _sBotUser;
 
         private static readonly ConcurrentDictionary<long, (DateTime checkedAt, bool isAllowed)> PinAllowedRegistry =
@@ -241,24 +241,7 @@ namespace UltraMafia.Frontend.Telegram
         }
 
 
-        public static async Task LockAndDo(this ITelegramBotClient bot, Func<Task> action)
-        {
-            try
-            {
-                await BotLock.WaitAsync();
-                await Task.Delay(50);
-                await action();
-            }
-            catch (Exception e)
-            {
-                Log.Error(e, "Error occured when accessing to Bot API");
-            }
-
-            finally
-            {
-                BotLock.Release();
-            }
-        }
+        
 
         private static async Task<User> GetBotUser(this ITelegramBotClient bot, CancellationToken token)
         {
