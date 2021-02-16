@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using UltraMafia.Common.Service.Frontend;
+using UltraMafia.Frontend.Model.Config;
 using UltraMafia.Frontend.Service.Telegram;
 using UltraMafia.Frontend.Telegram;
-using UltraMafia.Frontend.Telegram.Config;
 
 namespace UltraMafia.Frontend.Extensions
 {

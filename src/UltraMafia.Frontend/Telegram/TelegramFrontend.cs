@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using JKang.EventBus;
+using Microsoft.Extensions.Logging;
 using Serilog;
 using Telegram.Bot;
 using Telegram.Bot.Args;
@@ -11,14 +12,11 @@ using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
-using UltraMafia.Common.Config;
-using UltraMafia.Common.Events;
 using UltraMafia.Common.GameModel;
 using UltraMafia.DAL.Enums;
 using UltraMafia.DAL.Model;
 using UltraMafia.Frontend.Events;
 using UltraMafia.Frontend.Extensions;
-using UltraMafia.Frontend.Telegram.Config;
 using static UltraMafia.DAL.Enums.GameActions;
 
 namespace UltraMafia.Frontend.Telegram
@@ -29,17 +27,17 @@ namespace UltraMafia.Frontend.Telegram
         private readonly ITelegramBotClient _bot;
         private readonly IEventPublisher _eventPublisher;
         private readonly ITelegramMessageProcessor _messageProcessor;
+        private readonly ILogger<TelegramFrontend> _logger;
 
 
-        public TelegramFrontend(TelegramFrontendSettings settings, IServiceProvider serviceProvider,
-            GameSettings gameSettings, IEventPublisher eventPublisher, ITelegramMessageProcessor messageProcessor,
-            ITelegramBotClient bot)
+        public TelegramFrontend(IEventPublisher eventPublisher, ITelegramMessageProcessor messageProcessor,
+            ITelegramBotClient bot, ILogger<TelegramFrontend> logger)
         {
             _eventPublisher = eventPublisher;
             _messageProcessor = messageProcessor;
             _bot = bot;
+            _logger = logger;
             _startTime = DateTime.Now;
-            SetupMessageProcessor();
         }
 
         #region Bot Handlers
@@ -66,14 +64,14 @@ namespace UltraMafia.Frontend.Telegram
                     _ => exception.ToString()
                 };
 
-                Log.Error(exception, errorMessage);
+                _logger.LogError(exception, "{ErrorMessage}", errorMessage);
             }
         }
 
         private async ValueTask BotOnCallbackQueryReceived(CallbackQuery callBackQuery)
         {
             var data = callBackQuery.Data;
-            Log.Debug("User {UserId} doing action {Action}", callBackQuery.From.Id, data);
+            _logger.LogDebug("User {UserId} doing action {Action}", callBackQuery.From.Id, data);
             if (string.IsNullOrWhiteSpace(data))
                 return;
 
@@ -144,37 +142,10 @@ namespace UltraMafia.Frontend.Telegram
             return _messageProcessor.HandleMessageAsync(message);
         }
 
-        private void SetupMessageProcessor()
-        {
-            _messageProcessor
-                .Command("start", false,
-                    (message, args) =>
-                    {
-                        return _eventPublisher.PublishEventAsync(new GamerJoinRequestEvent());
-                    })
-                .Command()
-        }
-        
-
         #endregion
 
         #region Actions
 
-        private async Task ProcessJoinCommand(Message message)
-        {
-            Log.Debug($"Processing join command from {message.From.Id}");
-            if (message.Chat.Type != ChatType.Private)
-                return;
-            var messageSplit = message.Text.Split(' ');
-            if (messageSplit.Length < 2 || !int.TryParse(messageSplit[1], out var roomId))
-                throw new Exception(
-                    "Невозможно зарегистрировать в игре. Отсутствует номер игровой комнаты. Сначала нажмите на кнопку в общем чате.");
-
-            int gamerAccountId;
-
-
-            OnGameJoinRequest(roomId, gamerAccountId);
-        }
 
         private Task ProcessMessageDefault(Message message)
         {

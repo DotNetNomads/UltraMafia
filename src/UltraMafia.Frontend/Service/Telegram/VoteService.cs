@@ -12,6 +12,7 @@ using UltraMafia.Common.GameModel;
 using UltraMafia.Common.Service.Frontend;
 using UltraMafia.DAL.Model;
 using UltraMafia.Frontend.Events;
+using UltraMafia.Frontend.Model;
 using UltraMafia.Frontend.Telegram;
 using static System.Array;
 

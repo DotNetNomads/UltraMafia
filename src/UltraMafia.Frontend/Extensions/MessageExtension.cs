@@ -43,9 +43,10 @@ namespace UltraMafia.Frontend.Extensions
             string[] splitMessage;
             var text = message.Text;
             if (text.StartsWith("/") && Regex.IsMatch((splitMessage = text.Split(" "))[0],
-                "^[a-zA-Z0-9]*$"))
+                "^[a-zA-Z0-9@]*$"))
             {
-                commandName = splitMessage[0].Remove(1);
+                var fullCommandName = splitMessage[0].Remove(1);
+                commandName = fullCommandName.Contains('@') ? fullCommandName.Split('@')[0] : fullCommandName;
                 arguments = splitMessage.Skip(1).ToArray();
                 return true;
             }

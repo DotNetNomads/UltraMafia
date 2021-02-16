@@ -1,56 +1,50 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Telegram.Bot.Types;
-using UltraMafia.Common.Events;
+using UltraMafia.Frontend.ComandHandlers;
 using UltraMafia.Frontend.Extensions;
-using UltraMafia.Frontend.Telegram.Config;
 
 namespace UltraMafia.Frontend.Telegram
 {
     public interface ITelegramMessageProcessor
     {
-        Func<Message, ValueTask>? DefaultHandler { set; }
-
-        TelegramMessageProcessor Command(string command, bool publicChat,
-            Func<string[], Chat, User, ValueTask> handler);
-
         ValueTask HandleMessageAsync(Message message);
     }
 
     public class TelegramMessageProcessor : ITelegramMessageProcessor
     {
-        private record CommandHandler(string Command, bool PublicChat,
-            Func<string[], Chat, User, ValueTask> Handler);
+        private readonly INonCommandMessageHandler _defaultHandler;
+        private readonly ILogger<TelegramMessageProcessor> _logger;
+        private readonly Dictionary<string, ICommandHandler> _commandHandlers;
 
-        private readonly List<CommandHandler> _commandHandlers = new();
-        public Func<Message, ValueTask>? DefaultHandler { private get; set; }
-        private readonly TelegramFrontendSettings _settings;
-
-        public TelegramMessageProcessor(TelegramFrontendSettings settings) => _settings = settings;
-
-        public TelegramMessageProcessor Command(string command, bool publicChat,
-            Func<string[], Chat, User, ValueTask> handler)
+        public TelegramMessageProcessor(INonCommandMessageHandler defaultHandler,
+            ILogger<TelegramMessageProcessor> logger, Dictionary<string, ICommandHandler> commandHandlers)
         {
-            _commandHandlers.Add(new CommandHandler(command, publicChat, handler));
-            return this;
+            _defaultHandler = defaultHandler;
+            _logger = logger;
+            _commandHandlers = commandHandlers;
         }
-
-        private bool CommandMatch(string name, string text) =>
-            text == $"/{name}" || text == $"/{name}@{_settings.BotUserName}";
 
         public ValueTask HandleMessageAsync(Message message)
         {
             if (!message.TryParseCommand(out var commandName, out var arguments))
-                return DefaultHandler?.Invoke(message) ??
-                       throw new InvalidOperationException("Please provide default handler for messages");
+            {
+                _logger.LogDebug("Handling non command message: {Msg} from {UserId}", message.Text,
+                    message.From.Username ?? message.From.Id.ToString());
+                return _defaultHandler.HandleMessageAsync(message);
+            }
 
-            var isPublicChat = message.IsPublicChat();
-            var handler = _commandHandlers.FirstOrDefault(ch =>
-                ch.PublicChat == isPublicChat && ch.Command == commandName);
-            return handler?.Handler.Invoke(arguments, message.Chat, message.From) ?? ValueTask.CompletedTask;
+            if (_commandHandlers.ContainsKey(commandName))
+            {
+                _logger.LogDebug("Handling command {CommandName} with args {Arguments} from {UserId}",
+                    commandName, arguments, message.From.Username ?? message.From.Id.ToString());
+                return _commandHandlers[commandName].HandleCommandAsync(arguments, message.Chat, message.From);
+            }
+
+            _logger.LogDebug("Can't found handler for command {CommandName} from {UserId}", commandName,
+                message.From.Username ?? message.From.Id.ToString());
+            return ValueTask.CompletedTask;
         }
     }
 }

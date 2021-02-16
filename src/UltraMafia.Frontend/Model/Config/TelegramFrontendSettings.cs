@@ -1,4 +1,4 @@
-namespace UltraMafia.Frontend.Telegram.Config
+namespace UltraMafia.Frontend.Model.Config
 {
     public sealed class TelegramFrontendSettings
     {

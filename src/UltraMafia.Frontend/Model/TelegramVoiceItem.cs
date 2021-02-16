@@ -1,4 +1,4 @@
-namespace UltraMafia.Frontend.Telegram
+namespace UltraMafia.Frontend.Model
 {
     public struct TelegramVoiceItem
     {
