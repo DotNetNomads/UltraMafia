@@ -17,7 +17,7 @@ namespace UltraMafia.DAL.Migrations
                 .HasAnnotation("ProductVersion", "3.1.3")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
-            modelBuilder.Entity("UltraMafia.DAL.Model.GameRoom", b =>
+            modelBuilder.Entity("UltraMafia.App.DAL.Model.GameRoom", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -36,7 +36,7 @@ namespace UltraMafia.DAL.Migrations
                     b.ToTable("GameRooms");
                 });
 
-            modelBuilder.Entity("UltraMafia.DAL.Model.GameSession", b =>
+            modelBuilder.Entity("UltraMafia.App.DAL.Model.GameSession", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -67,7 +67,7 @@ namespace UltraMafia.DAL.Migrations
                     b.ToTable("GameSessions");
                 });
 
-            modelBuilder.Entity("UltraMafia.DAL.Model.GameSessionMember", b =>
+            modelBuilder.Entity("UltraMafia.App.DAL.Model.GameSessionMember", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -98,7 +98,7 @@ namespace UltraMafia.DAL.Migrations
                     b.ToTable("GameSessionMembers");
                 });
 
-            modelBuilder.Entity("UltraMafia.DAL.Model.GamerAccount", b =>
+            modelBuilder.Entity("UltraMafia.App.DAL.Model.GamerAccount", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -121,30 +121,30 @@ namespace UltraMafia.DAL.Migrations
                     b.ToTable("GamerAccounts");
                 });
 
-            modelBuilder.Entity("UltraMafia.DAL.Model.GameSession", b =>
+            modelBuilder.Entity("UltraMafia.App.DAL.Model.GameSession", b =>
                 {
-                    b.HasOne("UltraMafia.DAL.Model.GamerAccount", "CreatedByGamerAccount")
+                    b.HasOne("UltraMafia.App.DAL.Model.GamerAccount", "CreatedByGamerAccount")
                         .WithMany()
                         .HasForeignKey("CreatedByGamerAccountId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("UltraMafia.DAL.Model.GameRoom", "Room")
+                    b.HasOne("UltraMafia.App.DAL.Model.GameRoom", "Room")
                         .WithMany()
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("UltraMafia.DAL.Model.GameSessionMember", b =>
+            modelBuilder.Entity("UltraMafia.App.DAL.Model.GameSessionMember", b =>
                 {
-                    b.HasOne("UltraMafia.DAL.Model.GameSession", "GameSession")
+                    b.HasOne("UltraMafia.App.DAL.Model.GameSession", "GameSession")
                         .WithMany("GameMembers")
                         .HasForeignKey("GameSessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("UltraMafia.DAL.Model.GamerAccount", "GamerAccount")
+                    b.HasOne("UltraMafia.App.DAL.Model.GamerAccount", "GamerAccount")
                         .WithMany()
                         .HasForeignKey("GamerAccountId")
                         .OnDelete(DeleteBehavior.Cascade)

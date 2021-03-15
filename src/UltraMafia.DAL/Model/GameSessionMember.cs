@@ -1,4 +1,3 @@
-using UlstraMafia.DAL;
 using UltraMafia.DAL.Enums;
 
 namespace UltraMafia.DAL.Model
