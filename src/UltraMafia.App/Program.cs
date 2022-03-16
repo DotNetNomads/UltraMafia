@@ -27,7 +27,7 @@ var serviceProvider = new ServiceCollection()
     .AddMemoryCache()
     .AddTelegramFrontend(configuration)
     .AddMafiaGame(configuration)
-    .AddEventBus(builder =>
+    .AddEventBus(_ =>
     {
     })
     .BuildServiceProvider();

@@ -11,7 +11,7 @@ namespace UltraMafia.DAL.Extensions
         public DbContextAccessor(IServiceScope scope)
         {
             _scope = scope;
-            DbContext = scope.ServiceProvider.GetService<GameDbContext>();
+            DbContext = scope.ServiceProvider.GetService<GameDbContext>() ?? throw new InvalidOperationException();
         }
 
         public void Dispose()

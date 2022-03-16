@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -30,6 +31,7 @@ namespace UltraMafia.DAL.Extensions
             using (var scope = serviceProvider.CreateScope())
             {
                 var context = scope.ServiceProvider.GetService<GameDbContext>();
+                Debug.Assert(context != null, nameof(context) + " != null");
                 await context.Database.MigrateAsync();
             }
 

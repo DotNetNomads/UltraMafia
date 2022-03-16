@@ -7,7 +7,6 @@ using JKang.EventBus;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Telegram.Bot;
-using Telegram.Bot.Args;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -71,8 +70,8 @@ namespace UltraMafia.Frontend.Telegram
                             UpdateType.Message => update.Message.Chat.Id,
                             UpdateType.CallbackQuery => expr,
                             _ => null
-                        }
-                        _bot.LockAndDo(() => _bot.SendTextMessageAsync())
+                        };
+                        _bot.LockAndDo(() => _bot.SendTextMessageAsync());
                         break;
                     default:
                         errorMessage = exception.ToString();

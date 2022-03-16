@@ -14,6 +14,7 @@ using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using UltraMafia.DAL;
 using UltraMafia.DAL.Model;
+using UltraMafia.Frontend.Extensions;
 using UltraMafia.Frontend.Model;
 using UltraMafia.Frontend.Model.Config;
 
