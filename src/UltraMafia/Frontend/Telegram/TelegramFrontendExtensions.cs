@@ -162,11 +162,12 @@ namespace UltraMafia.Frontend.Telegram
                     Message? message = null;
                     await bot.LockAndDo(async () =>
                     {
-                        message = await bot.SendTextMessageAsync(newSession.Room.ExternalRoomId, text,
-                            ParseMode.Html,
-                            false,
-                            false, 0,
-                            new InlineKeyboardMarkup(buttons), registrationMessageInfo.CancellationTokenSource.Token);
+                        message = await bot.SendTextMessageAsync(
+                            chatId: newSession.Room.ExternalRoomId,
+                            text: text,
+                            parseMode: ParseMode.Html,
+                            replyMarkup: new InlineKeyboardMarkup(buttons),
+                            cancellationToken: registrationMessageInfo.CancellationTokenSource.Token);
                     });
                     if (message == null)
                     {
@@ -210,11 +211,13 @@ namespace UltraMafia.Frontend.Telegram
 
             var text = GenerateRegistrationMessage(session, settings, out var buttons);
 
-            await bot.LockAndDo(() => bot.EditMessageTextAsync(new ChatId(session.Room.ExternalRoomId),
-                currentMessageInfo.CurrentMessageId.Value,
-                text,
-                ParseMode.Html, false,
-                new InlineKeyboardMarkup(buttons), currentMessageInfo.CancellationTokenSource.Token));
+            await bot.LockAndDo(() => bot.EditMessageTextAsync(
+                chatId: new ChatId(session.Room.ExternalRoomId),
+                messageId: currentMessageInfo.CurrentMessageId.Value,
+                text: text,
+                parseMode: ParseMode.Html, 
+                replyMarkup: new InlineKeyboardMarkup(buttons), 
+                cancellationToken: currentMessageInfo.CancellationTokenSource.Token));
         }
 
         private static string GenerateRegistrationMessage(GameSession session, TelegramFrontendSettings settings,
@@ -237,9 +240,8 @@ namespace UltraMafia.Frontend.Telegram
 
             buttons = new List<InlineKeyboardButton>()
             {
-                new InlineKeyboardButton
+                new InlineKeyboardButton("Я в деле! 🎮")
                 {
-                    Text = "Я в деле! 🎮",
                     Url = $"https://t.me/{settings.BotUserName}?start={session.RoomId}"
                 }
             };
@@ -276,17 +278,18 @@ namespace UltraMafia.Frontend.Telegram
         private static async Task<bool> CheckPinIsAllowed(this ITelegramBotClient bot, long chatId,
             CancellationToken token)
         {
+            // FIXME: doesn't work after updating BOT API
             // we are caching pin allowance only for one minute.
-            if (PinAllowedRegistry.TryGetValue(chatId, out var info) &&
-                (DateTime.Now - info.checkedAt).TotalSeconds <= 60)
-                return info.isAllowed;
+            // if (PinAllowedRegistry.TryGetValue(chatId, out var info) &&
+                // (DateTime.Now - info.checkedAt).TotalSeconds <= 60)
+                // return info.isAllowed;
             // removing outdated information about pin permission
-            var botUser = await bot.GetBotUser(token);
-            var chatMember = await bot.GetChatMemberAsync(chatId, botUser.Id, token);
-            var pinAllowed = chatMember.CanPinMessages ?? false;
-            var newValue = (DateTime.Now, pinAllowed);
-            PinAllowedRegistry.AddOrUpdate(chatId, newValue, (key, value) => newValue);
-            return pinAllowed;
+            // var botUser = await bot.GetBotUser(token);
+            // var chatMember = await bot.GetChatMemberAsync(chatId, botUser.Id, token);
+            // var pinAllowed = chatMember.CanPinMessages ?? false;
+            // var newValue = (DateTime.Now, pinAllowed);
+            // PinAllowedRegistry.AddOrUpdate(chatId, newValue, (key, value) => newValue);
+            return false;
         }
 
         public static async Task PinMessageIfAllowed(this ITelegramBotClient bot, Message message,
@@ -347,7 +350,7 @@ namespace UltraMafia.Frontend.Telegram
         public static (string actionName, int gamerId)? GetAction(int gameMemberId) =>
             ActionsRegistry.TryGetValue(gameMemberId, out var action)
                 ? action
-                : ((string actionName, int gamerId)?) null;
+                : ((string actionName, int gamerId)?)null;
 
         public static void RemoveAction(int gameMemberId) => ActionsRegistry.TryRemove(gameMemberId, out _);
 

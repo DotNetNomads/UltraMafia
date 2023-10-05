@@ -9,6 +9,7 @@ using Serilog;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Exceptions;
+using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
@@ -40,13 +41,13 @@ namespace UltraMafia.Frontend.Telegram
 
         #region Bot Handlers
 
-        private async void BotOnOnUpdate(object sender, UpdateEventArgs e)
+        private async Task BotOnUpdateAsync(ITelegramBotClient botClient, Update updateEvent,
+            CancellationToken cancellationToken)
         {
-            var update = e.Update;
-            var handler = update.Type switch
+            var handler = updateEvent.Type switch
             {
-                UpdateType.Message => BotOnMessageReceived(update.Message),
-                UpdateType.CallbackQuery => BotOnCallbackQueryReceived(update.CallbackQuery),
+                UpdateType.Message => BotOnMessageReceived(updateEvent.Message),
+                UpdateType.CallbackQuery => BotOnCallbackQueryReceived(updateEvent.CallbackQuery),
                 _ => null
             };
 
@@ -62,7 +63,7 @@ namespace UltraMafia.Frontend.Telegram
                 var errorMessage = exception switch
                 {
                     ApiRequestException apiRequestException =>
-                    $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
+                        $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
                     _ => exception.ToString()
                 };
 
@@ -107,7 +108,7 @@ namespace UltraMafia.Frontend.Telegram
             var parsedActionToId = 0;
             if (requestArgs.Length > 2 && !int.TryParse(requestArgs[2], out parsedActionToId))
                 return;
-            var actionToId = parsedActionToId > 0 ? parsedActionToId : (int?) null;
+            var actionToId = parsedActionToId > 0 ? parsedActionToId : (int?)null;
 
             var actionDoneText = "Действие выбрано!";
             try
@@ -183,8 +184,8 @@ namespace UltraMafia.Frontend.Telegram
             }
             catch (Exception e)
             {
-                await _bot.SendTextMessageAsync(message.Chat.Id, e.Message, ParseMode.Default, false, false,
-                    message.MessageId);
+                await _bot.SendTextMessageAsync(chatId: message.Chat.Id, text: e.Message, 
+                    replyToMessageId: message.MessageId);
                 Log.Error(e, "Error occured in message handling");
             }
         }
@@ -296,12 +297,14 @@ namespace UltraMafia.Frontend.Telegram
         public void ActivateFrontend()
         {
             _startTime = DateTime.UtcNow;
-            _bot.StartReceiving(new[]
-            {
-                UpdateType.CallbackQuery, UpdateType.Message
-            });
-
-            _bot.OnUpdate += BotOnOnUpdate;
+            _bot.StartReceiving(
+                receiverOptions: new ReceiverOptions()
+                {
+                    AllowedUpdates = Array.Empty<UpdateType>()
+                },
+                updateHandler: (client, update, cToken) => BotOnUpdateAsync(client, update, cToken),
+                pollingErrorHandler: (client, exception, cToken) => Log.Error(exception, "Pooling error")
+            );
         }
 
         public Task MuteAll(GameRoom room, DateTime until)
@@ -378,8 +381,8 @@ namespace UltraMafia.Frontend.Telegram
             const int maxTries = 10;
             // we waiting for last words (one minute)
             for (var currentTry = 1;
-                currentTry <= maxTries;
-                currentTry++)
+                 currentTry <= maxTries;
+                 currentTry++)
             {
                 await Task.Delay(5000);
                 if (TelegramFrontendExtensions.IsLastWordsWritten(gamerChatId))
@@ -473,7 +476,7 @@ namespace UltraMafia.Frontend.Telegram
             var voicesInfo = new StringBuilder();
             var usersAndVoices = (from voice in voices
                 join user in telegramVote.AllowedToPassVoteUsersIds on voice.UserId equals user.Key
-                select new {voice = voice.Voice, userName = user.Value}).ToList();
+                select new { voice = voice.Voice, userName = user.Value }).ToList();
             foreach (var (uiName, internalName) in telegramVote.Variants)
             {
                 var voiceInfo = usersAndVoices.Where(u => u.voice == internalName).Select(u => u.userName).ToList();
@@ -485,9 +488,8 @@ namespace UltraMafia.Frontend.Telegram
             var finalText = $"<b>Голосование</b>\n{telegramVote.Text}\n\n{voicesInfo}";
             if (finish)
             {
-                await _bot.LockAndDo(() => _bot.EditMessageTextAsync(roomId, messageId.Value,
-                    $"{finalText}\n<b>Голосование завершено!</b>", ParseMode.Html, false,
-                    null));
+                await _bot.LockAndDo(() => _bot.EditMessageTextAsync(chatId: roomId, messageId: messageId.Value,
+                    text: $"{finalText}\n<b>Голосование завершено!</b>", parseMode: ParseMode.Html));
                 return;
             }
 
@@ -495,9 +497,8 @@ namespace UltraMafia.Frontend.Telegram
                 .Variants
                 .Select(variant => new List<InlineKeyboardButton>
                 {
-                    new InlineKeyboardButton
+                    new InlineKeyboardButton( $"{variant.uiName} ({voices.Count(v => v.Voice == variant.internalName)})")
                     {
-                        Text = $"{variant.uiName} ({voices.Count(v => v.Voice == variant.internalName)})",
                         CallbackData = $"vote-{variant.internalName}"
                     }
                 })
@@ -506,8 +507,8 @@ namespace UltraMafia.Frontend.Telegram
             {
                 if (messageId == null)
                 {
-                    var message = await _bot.SendTextMessageAsync(roomId, finalText, ParseMode.Html, false, false, 0,
-                        new InlineKeyboardMarkup(buttons)
+                    var message = await _bot.SendTextMessageAsync(chatId:roomId, text: finalText, parseMode: ParseMode.Html, 
+                        replyMarkup: new InlineKeyboardMarkup(buttons)
                     );
                     await Task.Delay(100);
                     await _bot.PinMessageIfAllowed(message, CancellationToken.None);
@@ -515,8 +516,8 @@ namespace UltraMafia.Frontend.Telegram
                 }
                 else
                 {
-                    await _bot.EditMessageTextAsync(roomId, messageId.Value, finalText, ParseMode.Html, false,
-                        new InlineKeyboardMarkup(buttons));
+                    await _bot.EditMessageTextAsync(chatId: roomId, messageId: messageId.Value, text: finalText, 
+                        parseMode: ParseMode.Html, replyMarkup: new InlineKeyboardMarkup(buttons));
                 }
             });
         }
@@ -526,7 +527,7 @@ namespace UltraMafia.Frontend.Telegram
             GameSessionMember lynchTarget)
         {
             // creating vote
-            var variants = new[] {("👍", $"yes"), ("👎", "no")};
+            var variants = new[] { ("👍", $"yes"), ("👎", "no") };
             var allowedToVoteUserIds = new Dictionary<string, string>();
             foreach (var gameSessionMember in allowedMembers)
             {
@@ -613,9 +614,8 @@ namespace UltraMafia.Frontend.Telegram
                     {
                         result.Add(new List<InlineKeyboardButton>()
                         {
-                            new InlineKeyboardButton
+                            new InlineKeyboardButton(header.uiText)
                             {
-                                Text = header.uiText,
                                 CallbackData = " "
                             }
                         });
@@ -626,9 +626,8 @@ namespace UltraMafia.Frontend.Telegram
                     while (currentIndex < template.Length)
                     {
                         var (actionName, uiText) = template[currentIndex];
-                        actionButtons.Add(new InlineKeyboardButton
+                        actionButtons.Add(new InlineKeyboardButton(uiText)
                         {
-                            Text = uiText,
                             CallbackData = $"{actionName}-{actionFromMember.Id}-{member.Id}"
                         });
                         currentIndex++;
@@ -641,9 +640,9 @@ namespace UltraMafia.Frontend.Telegram
             Message? message = null;
             await _bot.LockAndDo(async () =>
             {
-                message = await _bot.SendTextMessageAsync(actionFromMember.GamerAccount.PersonalRoomId,
-                    text,
-                    ParseMode.Html, false, false, 0, new InlineKeyboardMarkup(keyboard));
+                message = await _bot.SendTextMessageAsync(chatId:actionFromMember.GamerAccount.PersonalRoomId,
+                    text: text,
+                    parseMode: ParseMode.Html, replyMarkup: new InlineKeyboardMarkup(keyboard));
             });
 
             // calculation how much tries with 5sec step
@@ -658,7 +657,7 @@ namespace UltraMafia.Frontend.Telegram
                 // check answer
                 if (TelegramFrontendExtensions.IsActionProvided(actionFromMember.Id))
                 {
-                    if (!(TelegramFrontendExtensions.GetAction(actionFromMember.Id) is {} actionInfo))
+                    if (!(TelegramFrontendExtensions.GetAction(actionFromMember.Id) is { } actionInfo))
                         continue;
 
                     var (actionName, gamerId) = actionInfo;
